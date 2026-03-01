@@ -1,0 +1,398 @@
+// ──────────────────────────────────────────────────────
+// ProductPlan — Prisma 7 Schema
+// Single source of truth for all data models.
+// Run `bunx prisma generate` to produce TypeScript types
+// and Zod validation schemas.
+// ──────────────────────────────────────────────────────
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma/client"
+}
+
+generator zod {
+  provider          = "prisma-zod-generator"
+  output            = "../src/generated/zod"
+  modelSuffix       = "Schema"
+  isGenerateSelect  = true
+  isGenerateInclude = true
+}
+
+// ──────────────────────────────────────────────────────
+// Enums
+// ──────────────────────────────────────────────────────
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  PENDING_SETUP
+  SUSPENDED
+}
+
+enum ClientUserRole {
+  CLIENT_ADMIN
+  CLIENT_USER
+  CLIENT_VIEWER
+}
+
+enum ProductStatus {
+  ACTIVE
+  ARCHIVED
+  DRAFT
+}
+
+enum ProductMemberRole {
+  LEAD
+  MEMBER
+}
+
+enum IdeaStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  DUPLICATE
+}
+
+enum RoadmapItemStatus {
+  BACKLOG
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ReleaseStatus {
+  PLANNED
+  IN_PROGRESS
+  RELEASED
+  CANCELLED
+}
+
+enum IssueSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  WONT_FIX
+}
+
+// ──────────────────────────────────────────────────────
+// Multi-Tenancy Models
+// ──────────────────────────────────────────────────────
+
+model SuperAdmin {
+  id           String   @id @default(cuid())
+  /// @zod.string.email()
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Client {
+  id         String       @id @default(cuid())
+  /// @zod.string.min(1).max(100)
+  name       String       @unique
+  /// @zod.string.min(1).max(50).regex(/^[a-z0-9-]+$/)
+  slug       String       @unique
+  clerkOrgId String?      @unique
+  status     ClientStatus @default(PENDING_SETUP)
+
+  clientUsers    ClientUser[]
+  products       Product[]
+  productMembers ProductMember[]
+  ideas          Idea[]
+  roadmaps       Roadmap[]
+  issues         Issue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([clerkOrgId])
+}
+
+model ClientUser {
+  id          String         @id @default(cuid())
+  clerkUserId String
+  client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId    String
+  role        ClientUserRole
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clerkUserId, clientId])
+  @@index([clerkUserId])
+  @@index([clientId])
+}
+
+// ──────────────────────────────────────────────────────
+// Core Business Models
+// ──────────────────────────────────────────────────────
+
+model Product {
+  id          String        @id @default(cuid())
+  /// @zod.string.min(1).max(100)
+  name        String
+  /// @zod.string.max(500)
+  description String?
+  vision      String?
+  strategy    String?
+  status      ProductStatus @default(ACTIVE)
+  /// @zod.string.regex(/^#[0-9A-Fa-f]{6}$/)
+  color       String        @default("#3B82F6")
+  icon        String?
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  members      ProductMember[]
+  ideas        Idea[]
+  roadmaps     Roadmap[]
+  issues       Issue[]
+  goals        Goal[]
+  customFields CustomField[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@unique([clientId, name])
+}
+
+model ProductMember {
+  id          String            @id @default(cuid())
+  product     Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId   String
+  clerkUserId String
+  role        ProductMemberRole
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([productId, clerkUserId])
+  @@index([productId])
+  @@index([clerkUserId])
+  @@index([clientId])
+}
+
+// ──────────────────────────────────────────────────────
+// Ideas Module
+// ──────────────────────────────────────────────────────
+
+model Idea {
+  id          String     @id @default(cuid())
+  /// @zod.string.min(1).max(200)
+  title       String
+  description String
+  status      IdeaStatus @default(SUBMITTED)
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  authorId  String // Clerk User ID
+
+  // RICE scoring
+  riceReach      Int?
+  riceImpact     Int?
+  riceConfidence Float?
+  riceEffort     Int?
+  riceScore      Float?
+
+  votes Int @default(0)
+
+  comments Comment[]
+  tags     Tag[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([productId])
+  @@index([authorId])
+  @@index([status])
+}
+
+// ──────────────────────────────────────────────────────
+// Roadmap Module
+// ──────────────────────────────────────────────────────
+
+model Roadmap {
+  id          String  @id @default(cuid())
+  /// @zod.string.min(1).max(100)
+  name        String
+  description String?
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  items    RoadmapItem[]
+  releases Release[]
+
+  isPublic Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([productId])
+}
+
+model RoadmapItem {
+  id          String            @id @default(cuid())
+  /// @zod.string.min(1).max(200)
+  title       String
+  description String?
+  status      RoadmapItemStatus @default(BACKLOG)
+  priority    Int               @default(0)
+
+  roadmap   Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  roadmapId String
+
+  release   Release? @relation(fields: [releaseId], references: [id])
+  releaseId String?
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roadmapId])
+  @@index([releaseId])
+}
+
+model Release {
+  id          String        @id @default(cuid())
+  /// @zod.string.min(1).max(100)
+  name        String
+  description String?
+  targetDate  DateTime?
+  status      ReleaseStatus @default(PLANNED)
+
+  roadmap   Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  roadmapId String
+
+  items RoadmapItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roadmapId])
+}
+
+// ──────────────────────────────────────────────────────
+// Issues Module
+// ──────────────────────────────────────────────────────
+
+model Issue {
+  id          String        @id @default(cuid())
+  /// @zod.string.min(1).max(200)
+  title       String
+  description String
+  severity    IssueSeverity @default(MEDIUM)
+  status      IssueStatus   @default(OPEN)
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId  String
+  reporterId String  // Clerk User ID
+  assigneeId String? // Clerk User ID
+
+  customersAffected Int @default(0)
+
+  comments Comment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([productId])
+  @@index([status])
+  @@index([severity])
+}
+
+// ──────────────────────────────────────────────────────
+// Goals, Comments, Tags, Custom Fields
+// ──────────────────────────────────────────────────────
+
+model Goal {
+  id           String  @id @default(cuid())
+  /// @zod.string.min(1).max(200)
+  title        String
+  description  String?
+  targetValue  Float?
+  currentValue Float?
+
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+}
+
+model Comment {
+  id       String @id @default(cuid())
+  content  String
+  authorId String // Clerk User ID
+
+  idea   Idea?   @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  ideaId String?
+
+  issue   Issue?  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issueId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ideaId])
+  @@index([issueId])
+  @@index([authorId])
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String
+  ideas Idea[]
+
+  @@unique([name])
+}
+
+model CustomField {
+  id        String  @id @default(cuid())
+  name      String
+  fieldType String // "text", "number", "date", "select"
+  options   Json? // For select-type fields
+
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  @@index([productId])
+}
