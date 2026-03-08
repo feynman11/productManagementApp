@@ -24,8 +24,10 @@ import { Route as AuthedSuperAdminClientsClientIdRouteImport } from './routes/_a
 import { Route as AuthedOrgSlugProductsNewRouteImport } from './routes/_authed/$orgSlug/products.new'
 import { Route as AuthedOrgSlugProductsProductIdRouteImport } from './routes/_authed/$orgSlug/products.$productId'
 import { Route as AuthedOrgSlugProductsProductIdRoadmapRouteImport } from './routes/_authed/$orgSlug/products.$productId.roadmap'
+import { Route as AuthedOrgSlugProductsProductIdReleasesRouteImport } from './routes/_authed/$orgSlug/products.$productId.releases'
 import { Route as AuthedOrgSlugProductsProductIdIssuesRouteImport } from './routes/_authed/$orgSlug/products.$productId.issues'
 import { Route as AuthedOrgSlugProductsProductIdIdeasRouteImport } from './routes/_authed/$orgSlug/products.$productId.ideas'
+import { Route as AuthedOrgSlugProductsProductIdFeaturesRouteImport } from './routes/_authed/$orgSlug/products.$productId.features'
 import { Route as AuthedOrgSlugProductsProductIdRoadmapIndexRouteImport } from './routes/_authed/$orgSlug/products.$productId.roadmap.index'
 import { Route as AuthedOrgSlugProductsProductIdIssuesIndexRouteImport } from './routes/_authed/$orgSlug/products.$productId.issues.index'
 import { Route as AuthedOrgSlugProductsProductIdIdeasIndexRouteImport } from './routes/_authed/$orgSlug/products.$productId.ideas.index'
@@ -112,6 +114,12 @@ const AuthedOrgSlugProductsProductIdRoadmapRoute =
     path: '/roadmap',
     getParentRoute: () => AuthedOrgSlugProductsProductIdRoute,
   } as any)
+const AuthedOrgSlugProductsProductIdReleasesRoute =
+  AuthedOrgSlugProductsProductIdReleasesRouteImport.update({
+    id: '/releases',
+    path: '/releases',
+    getParentRoute: () => AuthedOrgSlugProductsProductIdRoute,
+  } as any)
 const AuthedOrgSlugProductsProductIdIssuesRoute =
   AuthedOrgSlugProductsProductIdIssuesRouteImport.update({
     id: '/issues',
@@ -122,6 +130,12 @@ const AuthedOrgSlugProductsProductIdIdeasRoute =
   AuthedOrgSlugProductsProductIdIdeasRouteImport.update({
     id: '/ideas',
     path: '/ideas',
+    getParentRoute: () => AuthedOrgSlugProductsProductIdRoute,
+  } as any)
+const AuthedOrgSlugProductsProductIdFeaturesRoute =
+  AuthedOrgSlugProductsProductIdFeaturesRouteImport.update({
+    id: '/features',
+    path: '/features',
     getParentRoute: () => AuthedOrgSlugProductsProductIdRoute,
   } as any)
 const AuthedOrgSlugProductsProductIdRoadmapIndexRoute =
@@ -175,8 +189,10 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/products/new': typeof AuthedOrgSlugProductsNewRoute
   '/super-admin/clients/$clientId': typeof AuthedSuperAdminClientsClientIdRoute
   '/$orgSlug/products/': typeof AuthedOrgSlugProductsIndexRoute
+  '/$orgSlug/products/$productId/features': typeof AuthedOrgSlugProductsProductIdFeaturesRoute
   '/$orgSlug/products/$productId/ideas': typeof AuthedOrgSlugProductsProductIdIdeasRouteWithChildren
   '/$orgSlug/products/$productId/issues': typeof AuthedOrgSlugProductsProductIdIssuesRouteWithChildren
+  '/$orgSlug/products/$productId/releases': typeof AuthedOrgSlugProductsProductIdReleasesRoute
   '/$orgSlug/products/$productId/roadmap': typeof AuthedOrgSlugProductsProductIdRoadmapRouteWithChildren
   '/$orgSlug/products/$productId/ideas/$ideaId': typeof AuthedOrgSlugProductsProductIdIdeasIdeaIdRoute
   '/$orgSlug/products/$productId/issues/$issueId': typeof AuthedOrgSlugProductsProductIdIssuesIssueIdRoute
@@ -197,6 +213,8 @@ export interface FileRoutesByTo {
   '/$orgSlug/products/new': typeof AuthedOrgSlugProductsNewRoute
   '/super-admin/clients/$clientId': typeof AuthedSuperAdminClientsClientIdRoute
   '/$orgSlug/products': typeof AuthedOrgSlugProductsIndexRoute
+  '/$orgSlug/products/$productId/features': typeof AuthedOrgSlugProductsProductIdFeaturesRoute
+  '/$orgSlug/products/$productId/releases': typeof AuthedOrgSlugProductsProductIdReleasesRoute
   '/$orgSlug/products/$productId/ideas/$ideaId': typeof AuthedOrgSlugProductsProductIdIdeasIdeaIdRoute
   '/$orgSlug/products/$productId/issues/$issueId': typeof AuthedOrgSlugProductsProductIdIssuesIssueIdRoute
   '/$orgSlug/products/$productId/roadmap/$roadmapId': typeof AuthedOrgSlugProductsProductIdRoadmapRoadmapIdRoute
@@ -220,8 +238,10 @@ export interface FileRoutesById {
   '/_authed/$orgSlug/products/new': typeof AuthedOrgSlugProductsNewRoute
   '/_authed/super-admin/clients/$clientId': typeof AuthedSuperAdminClientsClientIdRoute
   '/_authed/$orgSlug/products/': typeof AuthedOrgSlugProductsIndexRoute
+  '/_authed/$orgSlug/products/$productId/features': typeof AuthedOrgSlugProductsProductIdFeaturesRoute
   '/_authed/$orgSlug/products/$productId/ideas': typeof AuthedOrgSlugProductsProductIdIdeasRouteWithChildren
   '/_authed/$orgSlug/products/$productId/issues': typeof AuthedOrgSlugProductsProductIdIssuesRouteWithChildren
+  '/_authed/$orgSlug/products/$productId/releases': typeof AuthedOrgSlugProductsProductIdReleasesRoute
   '/_authed/$orgSlug/products/$productId/roadmap': typeof AuthedOrgSlugProductsProductIdRoadmapRouteWithChildren
   '/_authed/$orgSlug/products/$productId/ideas/$ideaId': typeof AuthedOrgSlugProductsProductIdIdeasIdeaIdRoute
   '/_authed/$orgSlug/products/$productId/issues/$issueId': typeof AuthedOrgSlugProductsProductIdIssuesIssueIdRoute
@@ -246,8 +266,10 @@ export interface FileRouteTypes {
     | '/$orgSlug/products/new'
     | '/super-admin/clients/$clientId'
     | '/$orgSlug/products/'
+    | '/$orgSlug/products/$productId/features'
     | '/$orgSlug/products/$productId/ideas'
     | '/$orgSlug/products/$productId/issues'
+    | '/$orgSlug/products/$productId/releases'
     | '/$orgSlug/products/$productId/roadmap'
     | '/$orgSlug/products/$productId/ideas/$ideaId'
     | '/$orgSlug/products/$productId/issues/$issueId'
@@ -268,6 +290,8 @@ export interface FileRouteTypes {
     | '/$orgSlug/products/new'
     | '/super-admin/clients/$clientId'
     | '/$orgSlug/products'
+    | '/$orgSlug/products/$productId/features'
+    | '/$orgSlug/products/$productId/releases'
     | '/$orgSlug/products/$productId/ideas/$ideaId'
     | '/$orgSlug/products/$productId/issues/$issueId'
     | '/$orgSlug/products/$productId/roadmap/$roadmapId'
@@ -290,8 +314,10 @@ export interface FileRouteTypes {
     | '/_authed/$orgSlug/products/new'
     | '/_authed/super-admin/clients/$clientId'
     | '/_authed/$orgSlug/products/'
+    | '/_authed/$orgSlug/products/$productId/features'
     | '/_authed/$orgSlug/products/$productId/ideas'
     | '/_authed/$orgSlug/products/$productId/issues'
+    | '/_authed/$orgSlug/products/$productId/releases'
     | '/_authed/$orgSlug/products/$productId/roadmap'
     | '/_authed/$orgSlug/products/$productId/ideas/$ideaId'
     | '/_authed/$orgSlug/products/$productId/issues/$issueId'
@@ -413,6 +439,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgSlugProductsProductIdRoadmapRouteImport
       parentRoute: typeof AuthedOrgSlugProductsProductIdRoute
     }
+    '/_authed/$orgSlug/products/$productId/releases': {
+      id: '/_authed/$orgSlug/products/$productId/releases'
+      path: '/releases'
+      fullPath: '/$orgSlug/products/$productId/releases'
+      preLoaderRoute: typeof AuthedOrgSlugProductsProductIdReleasesRouteImport
+      parentRoute: typeof AuthedOrgSlugProductsProductIdRoute
+    }
     '/_authed/$orgSlug/products/$productId/issues': {
       id: '/_authed/$orgSlug/products/$productId/issues'
       path: '/issues'
@@ -425,6 +458,13 @@ declare module '@tanstack/react-router' {
       path: '/ideas'
       fullPath: '/$orgSlug/products/$productId/ideas'
       preLoaderRoute: typeof AuthedOrgSlugProductsProductIdIdeasRouteImport
+      parentRoute: typeof AuthedOrgSlugProductsProductIdRoute
+    }
+    '/_authed/$orgSlug/products/$productId/features': {
+      id: '/_authed/$orgSlug/products/$productId/features'
+      path: '/features'
+      fullPath: '/$orgSlug/products/$productId/features'
+      preLoaderRoute: typeof AuthedOrgSlugProductsProductIdFeaturesRouteImport
       parentRoute: typeof AuthedOrgSlugProductsProductIdRoute
     }
     '/_authed/$orgSlug/products/$productId/roadmap/': {
@@ -527,17 +567,23 @@ const AuthedOrgSlugProductsProductIdRoadmapRouteWithChildren =
   )
 
 interface AuthedOrgSlugProductsProductIdRouteChildren {
+  AuthedOrgSlugProductsProductIdFeaturesRoute: typeof AuthedOrgSlugProductsProductIdFeaturesRoute
   AuthedOrgSlugProductsProductIdIdeasRoute: typeof AuthedOrgSlugProductsProductIdIdeasRouteWithChildren
   AuthedOrgSlugProductsProductIdIssuesRoute: typeof AuthedOrgSlugProductsProductIdIssuesRouteWithChildren
+  AuthedOrgSlugProductsProductIdReleasesRoute: typeof AuthedOrgSlugProductsProductIdReleasesRoute
   AuthedOrgSlugProductsProductIdRoadmapRoute: typeof AuthedOrgSlugProductsProductIdRoadmapRouteWithChildren
 }
 
 const AuthedOrgSlugProductsProductIdRouteChildren: AuthedOrgSlugProductsProductIdRouteChildren =
   {
+    AuthedOrgSlugProductsProductIdFeaturesRoute:
+      AuthedOrgSlugProductsProductIdFeaturesRoute,
     AuthedOrgSlugProductsProductIdIdeasRoute:
       AuthedOrgSlugProductsProductIdIdeasRouteWithChildren,
     AuthedOrgSlugProductsProductIdIssuesRoute:
       AuthedOrgSlugProductsProductIdIssuesRouteWithChildren,
+    AuthedOrgSlugProductsProductIdReleasesRoute:
+      AuthedOrgSlugProductsProductIdReleasesRoute,
     AuthedOrgSlugProductsProductIdRoadmapRoute:
       AuthedOrgSlugProductsProductIdRoadmapRouteWithChildren,
   }

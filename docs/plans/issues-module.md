@@ -20,7 +20,14 @@ The Issues module tracks known problems, bugs, and customer-reported issues for 
 - Link issues to roadmap features for resolution tracking
 - Link issues to related ideas
 
-### Issue Analytics (Phase 8)
+### Notifications (Implemented)
+- **ISSUE_ASSIGNED**: Assignee notified when assigned to an issue
+- **ISSUE_COMMENTED**: Reporter and assignee notified when someone comments (excluding self)
+
+### Export (Implemented)
+- **CSV export**: Download all issues for a product as CSV with severity, status, assignee, and customer impact (`exportIssuesCsv` in `src/server/functions/export.ts`)
+
+### Issue Analytics (Future)
 - Client-specific issue trends over time
 - Severity distribution charts
 - Mean time to resolution metrics
@@ -61,9 +68,12 @@ src/server/functions/issues.ts
   ├── createIssue(data)                         → Issue
   ├── updateIssue(id, data)                     → Issue
   ├── updateIssueStatus(id, status)             → Issue
-  ├── assignIssue(id, assigneeId)               → Issue
-  ├── addComment(issueId, content)              → Comment
+  ├── assignIssue(id, assigneeId)               → Issue     (+ ISSUE_ASSIGNED notification)
+  ├── addComment(issueId, content)              → Comment   (+ ISSUE_COMMENTED notification)
   └── getIssueAnalytics(clientId, productId)    → Analytics data
+
+src/server/functions/export.ts
+  └── exportIssuesCsv(productId)                → { csv, filename }
 ```
 
 ## Routes

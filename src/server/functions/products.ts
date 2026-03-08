@@ -11,13 +11,28 @@ import { canWrite, canAdmin } from '~/lib/permissions'
 export const getProducts = createServerFn({ method: 'GET' })
   .handler(async () => {
     const { clientId } = await requireClientAuth()
-    return prisma.product.findMany({
+    const products = await prisma.product.findMany({
       where: { clientId },
       include: {
-        _count: { select: { ideas: true, roadmaps: true, issues: true } },
+        _count: { select: { ideas: true, issues: true } },
+        roadmaps: {
+          select: {
+            _count: {
+              select: { items: true },
+            },
+            items: {
+              where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+              select: { id: true },
+            },
+          },
+        },
       },
       orderBy: { name: 'asc' },
     })
+    return products.map(({ roadmaps, ...product }) => ({
+      ...product,
+      activeFeatureCount: roadmaps.reduce((sum, r) => sum + r.items.length, 0),
+    }))
   })
 
 export const getProduct = createServerFn({ method: 'GET' })
@@ -28,14 +43,35 @@ export const getProduct = createServerFn({ method: 'GET' })
       where: { id: data.productId, clientId },
       include: {
         _count: {
-          select: { ideas: true, roadmaps: true, issues: true, members: true },
+          select: { ideas: true, issues: true, members: true },
         },
         members: true,
         goals: true,
+        roadmaps: {
+          take: 1,
+          orderBy: { createdAt: 'asc' },
+          include: {
+            items: {
+              where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+              select: { id: true },
+            },
+            releases: {
+              include: {
+                _count: { select: { items: true } },
+              },
+              orderBy: { targetDate: 'asc' },
+            },
+          },
+        },
       },
     })
     if (!product) throw new Error('Product not found')
-    return product
+
+    // Flatten releases from the single roadmap
+    const releases = product.roadmaps[0]?.releases ?? []
+    const activeFeatureCount = product.roadmaps.reduce((sum, r) => sum + r.items.length, 0)
+    const { roadmaps, ...rest } = product
+    return { ...rest, releases, activeFeatureCount }
   })
 
 export const createProduct = createServerFn({ method: 'POST' })
@@ -53,8 +89,8 @@ export const createProduct = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole } = await requireClientAuth()
-    if (!canWrite(clientUserRole)) throw new Error('Insufficient permissions')
+    const { clientId, role, isDemo } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
     return prisma.product.create({
       data: { ...data, clientId },
     })
@@ -77,10 +113,9 @@ export const updateProduct = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole } = await requireClientAuth()
-    if (!canWrite(clientUserRole)) throw new Error('Insufficient permissions')
+    const { clientId, role, isDemo } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
     const { productId, ...updateData } = data
-    // Verify product belongs to client
     const existing = await prisma.product.findFirst({
       where: { id: productId, clientId },
     })
@@ -94,8 +129,8 @@ export const updateProduct = createServerFn({ method: 'POST' })
 export const archiveProduct = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ productId: z.string() }))
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole } = await requireClientAuth()
-    if (!canAdmin(clientUserRole))
+    const { clientId, role, isDemo } = await requireClientAuth()
+    if (!canAdmin(role, isDemo))
       throw new Error('Admin permission required')
     const existing = await prisma.product.findFirst({
       where: { id: data.productId, clientId },

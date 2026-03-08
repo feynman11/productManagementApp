@@ -1,11 +1,27 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
+import { ArrowLeft, AlertCircle, Plus, Trash2 } from 'lucide-react'
 import {
   getClient,
   updateClient,
   suspendClient,
+  activateClient,
+  addUserToOrg,
+  removeUserFromOrg,
+  updateUserOrgRole,
 } from '~/server/functions/clients'
-import { cn } from '~/lib/utils'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
+import { Badge } from '~/components/ui/badge'
+import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
+import { Separator } from '~/components/ui/separator'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select'
 
 export const Route = createFileRoute('/_authed/super-admin/clients/$clientId')(
   {
@@ -15,17 +31,17 @@ export const Route = createFileRoute('/_authed/super-admin/clients/$clientId')(
   },
 )
 
-const STATUS_STYLES: Record<string, string> = {
-  ACTIVE: 'bg-green-500/10 text-green-700 dark:text-green-400',
-  INACTIVE: 'bg-gray-500/10 text-gray-700 dark:text-gray-400',
-  PENDING_SETUP: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  SUSPENDED: 'bg-red-500/10 text-red-700 dark:text-red-400',
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  ACTIVE: 'default',
+  INACTIVE: 'secondary',
+  PENDING_SETUP: 'outline',
+  SUSPENDED: 'destructive',
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  CLIENT_ADMIN: 'Admin',
-  CLIENT_USER: 'User',
-  CLIENT_VIEWER: 'Viewer',
+  ADMIN: 'Admin',
+  CONTRIBUTOR: 'Contributor',
+  VIEWER: 'Viewer',
 }
 
 function ClientDetailPage() {
@@ -38,24 +54,31 @@ function ClientDetailPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  // Add user form
+  const [showAddUser, setShowAddUser] = useState(false)
+  const [newClerkUserId, setNewClerkUserId] = useState('')
+  const [newUserRole, setNewUserRole] = useState<'ADMIN' | 'CONTRIBUTOR' | 'VIEWER'>('VIEWER')
+  const [addingUser, setAddingUser] = useState(false)
+  const [addUserError, setAddUserError] = useState('')
+
+  function reload() {
+    navigate({
+      to: '/super-admin/clients/$clientId',
+      params: { clientId: client.id },
+      search: { page: 1 },
+    })
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     setSaving(true)
     try {
-      await updateClient({
-        data: { clientId: client.id, name, slug },
-      })
+      await updateClient({ data: { clientId: client.id, name, slug } })
       setEditing(false)
-      // Refresh the page data
-      navigate({
-        to: '/super-admin/clients/$clientId',
-        params: { clientId: client.id },
-      })
+      reload()
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to update client'
-      setError(message)
+      setError(err instanceof Error ? err.message : 'Failed to update client')
     } finally {
       setSaving(false)
     }
@@ -65,13 +88,47 @@ function ClientDetailPage() {
     if (!confirm('Are you sure you want to suspend this client? All users will lose access.')) return
     try {
       await suspendClient({ data: { clientId: client.id } })
-      navigate({
-        to: '/super-admin/clients/$clientId',
-        params: { clientId: client.id },
-      })
-    } catch {
-      // Error handling will improve with toast notifications
+      reload()
+    } catch { /* */ }
+  }
+
+  async function handleActivate() {
+    try {
+      await activateClient({ data: { clientId: client.id } })
+      reload()
+    } catch { /* */ }
+  }
+
+  async function handleAddUser(e: React.FormEvent) {
+    e.preventDefault()
+    setAddUserError('')
+    setAddingUser(true)
+    try {
+      await addUserToOrg({ data: { clientId: client.id, clerkUserId: newClerkUserId, role: newUserRole } })
+      setShowAddUser(false)
+      setNewClerkUserId('')
+      setNewUserRole('VIEWER')
+      reload()
+    } catch (err: unknown) {
+      setAddUserError(err instanceof Error ? err.message : 'Failed to add user')
+    } finally {
+      setAddingUser(false)
     }
+  }
+
+  async function handleRemoveUser(userId: string) {
+    if (!confirm('Remove this user from the organization?')) return
+    try {
+      await removeUserFromOrg({ data: { clientId: client.id, userId } })
+      reload()
+    } catch { /* */ }
+  }
+
+  async function handleRoleChange(userId: string, role: 'ADMIN' | 'CONTRIBUTOR' | 'VIEWER') {
+    try {
+      await updateUserOrgRole({ data: { clientId: client.id, userId, role } })
+      reload()
+    } catch { /* */ }
   }
 
   function formatDate(dateStr: string | Date) {
@@ -86,184 +143,221 @@ function ClientDetailPage() {
 
   return (
     <div className="space-y-8">
-      {/* Back link */}
       <Link
         to="/super-admin/clients"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        search={{ page: 1 }}
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        <span aria-hidden="true">&larr;</span> Back to Clients
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Back to Clients
       </Link>
 
-      {/* Client header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
               {client.name}
             </h2>
-            <span
-              className={cn(
-                'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
-                STATUS_STYLES[client.status] ?? 'bg-muted text-muted-foreground',
-              )}
-            >
+            <Badge variant={STATUS_VARIANT[client.status] ?? 'secondary'}>
               {client.status.replace('_', ' ')}
-            </span>
+            </Badge>
+            {client.isDemo && <Badge variant="secondary">Demo</Badge>}
           </div>
           <p className="mt-1 text-sm text-muted-foreground font-mono">
             /{client.slug}
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={() => setEditing(!editing)}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
+          <Button variant="outline" onClick={() => setEditing(!editing)}>
             {editing ? 'Cancel' : 'Edit'}
-          </button>
-          {client.status !== 'SUSPENDED' && (
-            <button
-              onClick={handleSuspend}
-              className="inline-flex h-9 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20"
-            >
-              Suspend Client
-            </button>
+          </Button>
+          {client.status === 'SUSPENDED' ? (
+            <Button variant="default" onClick={handleActivate}>
+              Activate
+            </Button>
+          ) : (
+            client.status !== 'INACTIVE' && (
+              <Button variant="destructive" onClick={handleSuspend}>
+                Suspend
+              </Button>
+            )
           )}
         </div>
       </div>
 
-      {/* Edit form */}
       {editing && (
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold text-card-foreground">
-            Edit Client
-          </h3>
-          {error && (
-            <div className="mb-4 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label htmlFor="edit-name" className="text-sm font-medium text-foreground">
-                  Name
-                </label>
-                <input
-                  id="edit-name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Edit Client</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {error && (
+              <div className="mb-5 flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {error}
               </div>
-              <div className="space-y-2">
-                <label htmlFor="edit-slug" className="text-sm font-medium text-foreground">
-                  Slug
-                </label>
-                <input
-                  id="edit-slug"
-                  type="text"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
-                  required
-                  pattern="^[a-z0-9-]+$"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
+            )}
+            <form onSubmit={handleSave} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label htmlFor="edit-name" className="text-sm font-medium text-foreground">Name</label>
+                  <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="edit-slug" className="text-sm font-medium text-foreground">Slug</label>
+                  <Input id="edit-slug" value={slug} onChange={(e) => setSlug(e.target.value)} required pattern="^[a-z0-9-]+$" />
+                </div>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-              >
+              <Button type="submit" disabled={saving}>
                 {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </form>
-        </div>
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Client details */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Info card */}
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold text-card-foreground">
-            Details
-          </h3>
-          <dl className="space-y-3">
-            <div className="flex justify-between">
-              <dt className="text-sm text-muted-foreground">ID</dt>
-              <dd className="text-sm font-mono text-foreground">{client.id}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-sm text-muted-foreground">Clerk Org ID</dt>
-              <dd className="text-sm font-mono text-foreground">
-                {client.clerkOrgId ?? 'Not linked'}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-sm text-muted-foreground">Status</dt>
-              <dd>
-                <span
-                  className={cn(
-                    'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
-                    STATUS_STYLES[client.status] ?? 'bg-muted text-muted-foreground',
-                  )}
-                >
-                  {client.status.replace('_', ' ')}
-                </span>
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-sm text-muted-foreground">Created</dt>
-              <dd className="text-sm text-foreground">
-                {formatDate(client.createdAt)}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-sm text-muted-foreground">Updated</dt>
-              <dd className="text-sm text-foreground">
-                {formatDate(client.updatedAt)}
-              </dd>
-            </div>
-          </dl>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="space-y-3">
+              <div className="flex justify-between">
+                <dt className="text-sm text-muted-foreground">ID</dt>
+                <dd className="text-sm font-mono text-foreground">{client.id}</dd>
+              </div>
+              <Separator />
+              <div className="flex justify-between">
+                <dt className="text-sm text-muted-foreground">Status</dt>
+                <dd>
+                  <Badge variant={STATUS_VARIANT[client.status] ?? 'secondary'}>
+                    {client.status.replace('_', ' ')}
+                  </Badge>
+                </dd>
+              </div>
+              <Separator />
+              <div className="flex justify-between">
+                <dt className="text-sm text-muted-foreground">Demo</dt>
+                <dd className="text-sm text-foreground">{client.isDemo ? 'Yes' : 'No'}</dd>
+              </div>
+              <Separator />
+              <div className="flex justify-between">
+                <dt className="text-sm text-muted-foreground">Created</dt>
+                <dd className="text-sm text-foreground">{formatDate(client.createdAt)}</dd>
+              </div>
+              <Separator />
+              <div className="flex justify-between">
+                <dt className="text-sm text-muted-foreground">Updated</dt>
+                <dd className="text-sm text-foreground">{formatDate(client.updatedAt)}</dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
 
-        {/* Users card */}
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold text-card-foreground">
-            Users ({client.clientUsers.length})
-          </h3>
-          {client.clientUsers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No users associated with this client yet.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {client.clientUsers.map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground font-mono">
-                      {user.clerkUserId}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Joined {formatDate(user.createdAt)}
-                    </p>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">
+              Users ({client.clientUsers.length})
+            </CardTitle>
+            <Button size="sm" variant="outline" onClick={() => setShowAddUser(!showAddUser)}>
+              <Plus className="h-3.5 w-3.5" />
+              Add User
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {showAddUser && (
+              <div className="mb-4 rounded-lg border border-border p-4">
+                {addUserError && (
+                  <div className="mb-3 flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {addUserError}
                   </div>
-                  <span className="inline-flex rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-                    {ROLE_LABELS[user.role] ?? user.role}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                )}
+                <form onSubmit={handleAddUser} className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-foreground">Clerk User ID</label>
+                    <Input
+                      value={newClerkUserId}
+                      onChange={(e) => setNewClerkUserId(e.target.value)}
+                      required
+                      placeholder="user_..."
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-foreground">Role</label>
+                    <Select value={newUserRole} onValueChange={(v) => setNewUserRole(v as typeof newUserRole)}>
+                      <SelectTrigger className="text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ADMIN">Admin</SelectItem>
+                        <SelectItem value="CONTRIBUTOR">Contributor</SelectItem>
+                        <SelectItem value="VIEWER">Viewer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="submit" size="sm" disabled={addingUser}>
+                      {addingUser ? 'Adding...' : 'Add'}
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => { setShowAddUser(false); setAddUserError('') }}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {client.clientUsers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No users associated with this client yet.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {client.clientUsers.map((cu) => (
+                  <div
+                    key={cu.id}
+                    className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {cu.user.name ?? cu.user.email ?? cu.user.clerkUserId}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Joined {formatDate(cu.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={cu.role}
+                        onValueChange={(v) => handleRoleChange(cu.userId, v as 'ADMIN' | 'CONTRIBUTOR' | 'VIEWER')}
+                      >
+                        <SelectTrigger className="h-7 text-xs w-[110px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ADMIN">Admin</SelectItem>
+                          <SelectItem value="CONTRIBUTOR">Contributor</SelectItem>
+                          <SelectItem value="VIEWER">Viewer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => handleRemoveUser(cu.userId)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

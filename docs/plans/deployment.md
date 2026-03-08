@@ -42,15 +42,20 @@ CLERK_SECRET_KEY="sk_live_..."
 VITE_CLERK_PUBLISHABLE_KEY="pk_live_..."
 CLERK_WEBHOOK_SIGNING_SECRET="whsec_..."
 
+# Super Admin JWT auth
+SUPER_ADMIN_JWT_SECRET="generate-a-random-256-bit-secret"
+
+# OpenAI (optional — enables AI features)
+OPENAI_API_KEY="sk-..."
+
 # Server
 PORT=3000
 NODE_ENV=production
-
-# Redis (optional, for caching)
-REDIS_URL="redis://host:6379"
 ```
 
-**Important:** `VITE_` prefixed variables are embedded into the client bundle at build time. All other variables are server-only.
+**Important:**
+- `VITE_` prefixed variables are embedded into the client bundle at build time. All other variables are server-only.
+- `SUPER_ADMIN_JWT_SECRET` and `OPENAI_API_KEY` must NOT have a `VITE_` prefix — they are server-only secrets.
 
 ## Database Migrations
 
@@ -114,9 +119,14 @@ jobs:
 
 ## Hosting Options
 
-### Option 1: Docker
+### Option 1: Docker (Implemented)
+
+The project includes a production-ready `Dockerfile` and `docker-compose.yml`.
+
+#### Dockerfile (multi-stage build)
 
 ```dockerfile
+# Stage 1: Build
 FROM oven/bun:1.3.10 AS build
 WORKDIR /app
 COPY package.json bun.lock ./
@@ -125,14 +135,33 @@ COPY . .
 RUN bunx prisma generate
 RUN bun run build
 
+# Stage 2: Production
 FROM oven/bun:1.3.10-slim
 WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json .
+COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/prisma.config.ts .
+COPY --from=build /app/src/generated ./src/generated
+ENV NODE_ENV=production
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD bun -e "fetch('http://localhost:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 CMD ["bun", "run", "dist/server/server.js"]
 ```
+
+#### docker-compose.yml (local development)
+
+```bash
+docker compose up -d
+```
+
+Starts PostgreSQL 16 on port 5432 and the app on port 3000. The database is health-checked before the app starts.
+
+#### .dockerignore
+
+Excludes `node_modules`, `tests`, `docs`, `.git`, `.env`, and other development-only files from the build context.
 
 ### Option 2: Railway / Fly.io / Render
 
@@ -152,9 +181,16 @@ TanStack Start has adapter support for serverless platforms. Check TanStack Star
 ## Security Checklist
 
 - [ ] `CLERK_SECRET_KEY` is never exposed to the client
+- [ ] `SUPER_ADMIN_JWT_SECRET` is a strong random secret (not the dev default)
+- [ ] `OPENAI_API_KEY` has no `VITE_` prefix (server-only)
+- [ ] `sa_token` cookie is httpOnly, Secure, SameSite=Strict
 - [ ] Database URL uses SSL in production
 - [ ] Webhook endpoints verify Svix signatures
-- [ ] Super Admin credentials use strong passwords
+- [ ] Super Admin passwords use argon2 hashing
 - [ ] CORS is configured for production domain only
 - [ ] All client data queries are scoped by `clientId`
+- [ ] All notification/AI/export functions scope by `clientId`
+- [ ] All super admin functions call `requireSuperAdmin()`
+- [ ] No `dangerouslySetInnerHTML` for AI-generated content
+- [ ] No raw SQL (`$queryRaw`) usage
 - [ ] Rate limiting on auth endpoints

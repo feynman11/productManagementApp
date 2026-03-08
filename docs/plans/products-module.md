@@ -21,6 +21,9 @@ The Products module enables clients to manage their product portfolio. Each prod
 - Counts of ideas, roadmap items, and issues per product
 - Quick-access links to each product's sub-modules
 
+### Export (Implemented)
+- **CSV export**: Download all products for a client as CSV (`exportProductsCsv` in `src/server/functions/export.ts`)
+
 ## Data Model
 
 ```prisma
@@ -60,6 +63,9 @@ src/server/functions/products.ts
   ├── updateProduct(id, data)         → Product
   ├── archiveProduct(id)              → Product
   └── getProductDashboard(clientId)   → Dashboard stats
+
+src/server/functions/export.ts
+  └── exportProductsCsv()             → { csv, filename }
 ```
 
 ### Example

@@ -1,34 +1,62 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
+import { z } from 'zod'
 import { AppLayout } from '~/components/layouts/app-layout'
 import { requireClientAuth } from '~/lib/auth.server'
 import { prisma } from '~/lib/prisma'
+import { switchOrg, getUserOrgs } from '~/server/functions/clients'
 
-const getClientBySlug = createServerFn({ method: 'GET' }).handler(async () => {
-  const { clientId, clientUserRole, userId } = await requireClientAuth()
+const getClientBySlug = createServerFn({ method: 'GET' })
+  .inputValidator(z.object({ slug: z.string() }))
+  .handler(async ({ data }) => {
+    const { clientId, role, isDemo, isGuest } = await requireClientAuth({ slug: data.slug })
 
-  const client = await prisma.client.findUnique({
-    where: { id: clientId },
-    select: { id: true, name: true, slug: true, status: true },
+    const client = await prisma.client.findUnique({
+      where: { id: clientId },
+      select: { id: true, name: true, slug: true, status: true, isDemo: true },
+    })
+
+    if (!client) throw new Error('Client not found')
+
+    return { client, clientId, role, isDemo, isGuest }
   })
 
-  if (!client) {
-    throw new Error('Client not found')
-  }
-
-  return { client, clientId, clientUserRole, userId }
-})
-
 export const Route = createFileRoute('/_authed/$orgSlug')({
-  loader: async () => {
+  beforeLoad: async ({ params, context }) => {
     try {
-      return await getClientBySlug()
+      const data = await getClientBySlug({ data: { slug: params.orgSlug } })
+
+      // Non-demo orgs require authentication
+      if (!data.isDemo && context.isGuest) {
+        throw new Error('Not authenticated')
+      }
+
+      let userOrgs: Awaited<ReturnType<typeof getUserOrgs>> = []
+
+      if (!data.isGuest) {
+        // Set this org as the user's active org (authenticated users only)
+        await switchOrg({ data: { slug: params.orgSlug } })
+        userOrgs = await getUserOrgs()
+      }
+
+      return {
+        role: data.role,
+        clientId: data.clientId,
+        isDemo: data.isDemo,
+        isGuest: data.isGuest,
+        userOrgs,
+      }
     } catch (error) {
+      if (error instanceof Error && error.message === 'Not authenticated') {
+        throw error
+      }
       if (
         error instanceof Error &&
         (error.message === 'No organization selected' ||
-          error.message === 'Client not found or inactive' ||
-          error.message === 'Client not found')
+          error.message === 'Organization is not active' ||
+          error.message === 'Not a member of this organization' ||
+          error.message === 'Client not found' ||
+          error.message === 'Organization not found')
       ) {
         throw redirect({ to: '/onboarding' })
       }
@@ -40,9 +68,10 @@ export const Route = createFileRoute('/_authed/$orgSlug')({
 
 function OrgLayout() {
   const { orgSlug } = Route.useParams()
+  const { isDemo, isGuest, userOrgs } = Route.useRouteContext()
 
   return (
-    <AppLayout orgSlug={orgSlug}>
+    <AppLayout orgSlug={orgSlug} isDemo={isDemo} isGuest={isGuest} userOrgs={userOrgs}>
       <Outlet />
     </AppLayout>
   )

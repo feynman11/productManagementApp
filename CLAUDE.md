@@ -43,10 +43,19 @@ All server logic uses TanStack Start server functions (`createServerFn`). No Exp
 Every business model has a `clientId` field. Every server function that reads/writes business data must call `requireClientAuth()` and scope queries by `clientId`. Never query business data without a `clientId` WHERE clause.
 
 ### Auth Pattern
+- Clerk is used for login/session only (NOT for organization management)
 - Clerk middleware runs on every request via `src/start.ts`
-- Server functions use `auth()` from `@clerk/tanstack-react-start/server`
+- Server functions use `auth()` from `@clerk/tanstack-react-start/server` for `userId` only
 - Protected routes use `_authed.tsx` pathless layout with `beforeLoad` guard
-- Super Admin auth is separate from Clerk (email + password)
+- Organizations are native (app-managed), not Clerk Organizations
+- `AppUser` model tracks each Clerk user in the DB; first user becomes super admin
+- `AppUser.activeClientId` tracks the user's current org selection
+- Demo org (`Client.isDemo = true`) allows all authenticated users read-only access
+- Org roles: `ADMIN`, `CONTRIBUTOR`, `VIEWER` (stored on `ClientUser`)
+- Super admins: `AppUser.isSuperAdmin = true`, authenticated via Clerk (no separate login)
+- `requireClientAuth({ slug? })` resolves org from URL slug or `activeClientId`
+- `requireSuperAdmin()` checks `AppUser.isSuperAdmin` (Clerk-authenticated)
+- `canWrite(role, isDemo)` and `canAdmin(role, isDemo)` enforce permissions
 
 ### Tailwind v4 (CSS-First)
 No `tailwind.config.ts` or `postcss.config.js`. All theming via `@theme inline` in `src/styles/app.css`. Colors use OKLCH format. Animations use `tw-animate-css` (not `tailwindcss-animate`).
@@ -66,9 +75,12 @@ bun run build            # Production build
 bunx prisma generate     # Regenerate Prisma types + Zod schemas
 bunx prisma migrate dev  # Create/apply migrations
 bunx prisma studio       # Database GUI
+bun run prisma/seed.ts   # Seed development data
 bun run test             # Vitest unit tests
 bun run test:e2e         # Playwright E2E tests
 bunx shadcn@latest add   # Add Shadcn component
+docker compose up -d     # Start app + PostgreSQL via Docker
+docker build .           # Build production Docker image
 ```
 
 ## Starter Repo

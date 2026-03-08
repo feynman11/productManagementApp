@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '~/lib/prisma'
 import { requireClientAuth } from '~/lib/auth.server'
 import { canWrite, canAdmin } from '~/lib/permissions'
+import { createNotification } from '~/lib/notifications.server'
 
 // ──────────────────────────────────────────────────────
 // Issues — Server Functions
@@ -69,8 +70,8 @@ export const createIssue = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole, userId } = await requireClientAuth()
-    if (!canWrite(clientUserRole)) throw new Error('Insufficient permissions')
+    const { clientId, role, isDemo, userId } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
 
     // Verify product belongs to client
     const product = await prisma.product.findFirst({
@@ -104,8 +105,8 @@ export const updateIssue = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole } = await requireClientAuth()
-    if (!canWrite(clientUserRole)) throw new Error('Insufficient permissions')
+    const { clientId, role, isDemo } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
 
     const { issueId, ...updateData } = data
 
@@ -129,8 +130,8 @@ export const assignIssue = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole } = await requireClientAuth()
-    if (!canAdmin(clientUserRole))
+    const { clientId, role, isDemo, userId } = await requireClientAuth()
+    if (!canAdmin(role, isDemo))
       throw new Error('Admin permission required')
 
     // Verify issue belongs to client
@@ -139,10 +140,24 @@ export const assignIssue = createServerFn({ method: 'POST' })
     })
     if (!existing) throw new Error('Issue not found')
 
-    return prisma.issue.update({
+    const updated = await prisma.issue.update({
       where: { id: data.issueId },
       data: { assigneeId: data.assigneeId },
     })
+
+    // Notify the new assignee
+    if (data.assigneeId && data.assigneeId !== userId) {
+      createNotification({
+        type: 'ISSUE_ASSIGNED',
+        title: 'Issue assigned to you',
+        message: `You were assigned to "${existing.title}"`,
+        recipientId: data.assigneeId,
+        clientId,
+        issueId: data.issueId,
+      }).catch(() => {})
+    }
+
+    return updated
   })
 
 export const addIssueComment = createServerFn({ method: 'POST' })
@@ -153,8 +168,8 @@ export const addIssueComment = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole, userId } = await requireClientAuth()
-    if (!canWrite(clientUserRole)) throw new Error('Insufficient permissions')
+    const { clientId, role, isDemo, userId } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
 
     // Verify issue belongs to client
     const issue = await prisma.issue.findFirst({
@@ -162,11 +177,29 @@ export const addIssueComment = createServerFn({ method: 'POST' })
     })
     if (!issue) throw new Error('Issue not found')
 
-    return prisma.comment.create({
+    const comment = await prisma.comment.create({
       data: {
         content: data.content,
         authorId: userId,
         issueId: data.issueId,
       },
     })
+
+    // Notify reporter and assignee about the comment (don't notify self)
+    const recipients = new Set<string>()
+    if (issue.reporterId !== userId) recipients.add(issue.reporterId)
+    if (issue.assigneeId && issue.assigneeId !== userId) recipients.add(issue.assigneeId)
+
+    for (const recipientId of recipients) {
+      createNotification({
+        type: 'ISSUE_COMMENTED',
+        title: 'New comment on issue',
+        message: `Someone commented on "${issue.title}"`,
+        recipientId,
+        clientId,
+        issueId: data.issueId,
+      }).catch(() => {})
+    }
+
+    return comment
   })

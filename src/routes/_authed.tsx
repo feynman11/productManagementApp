@@ -4,9 +4,9 @@ import { useEffect } from 'react'
 
 export const Route = createFileRoute('/_authed')({
   beforeLoad: ({ context }) => {
-    if (!context.userId) {
-      throw new Error('Not authenticated')
-    }
+    // Allow guests through — individual routes handle their own auth requirements.
+    // Demo org routes permit unauthenticated access; other routes check auth themselves.
+    return { isGuest: !context.userId }
   },
   errorComponent: ({ error }) => {
     if (error.message === 'Not authenticated') {
@@ -19,7 +19,8 @@ export const Route = createFileRoute('/_authed')({
 
     const isOrgError =
       error.message === 'No organization selected' ||
-      error.message === 'Client not found or inactive'
+      error.message === 'Organization is not active' ||
+      error.message === 'Not a member of this organization'
 
     if (isOrgError) {
       return <RedirectToOnboarding />

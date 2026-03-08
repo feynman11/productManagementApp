@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ThumbsUp } from 'lucide-react'
+import { Button } from '~/components/ui/button'
 import { cn } from '~/lib/utils'
 
 interface IdeaVoteButtonProps {
@@ -26,28 +27,24 @@ export function IdeaVoteButton({ votes, onVote, canVote }: IdeaVoteButtonProps) 
   }
 
   return (
-    <button
+    <Button
+      variant={hasVoted ? 'default' : 'outline'}
+      size="sm"
       onClick={handleVote}
       disabled={!canVote || voting || hasVoted}
       className={cn(
-        'inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors',
-        hasVoted
-          ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-          : 'border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground',
-        (!canVote || hasVoted) && 'cursor-default',
-        voting && 'opacity-50',
+        'gap-2',
+        hasVoted && 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/15',
       )}
       aria-label={`Upvote (${localVotes} votes)`}
     >
       <ThumbsUp
         className={cn(
-          'h-4 w-4',
-          hasVoted
-            ? 'fill-blue-600 text-blue-600 dark:fill-blue-400 dark:text-blue-400'
-            : 'text-muted-foreground',
+          'h-4 w-4 transition-all duration-200',
+          hasVoted && 'fill-primary scale-110',
         )}
       />
       <span className="font-semibold tabular-nums">{localVotes}</span>
-    </button>
+    </Button>
   )
 }

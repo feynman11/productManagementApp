@@ -102,10 +102,22 @@ export async function requireClientAuth() {
 }
 
 export async function requireSuperAdmin() {
-  // Super admin auth is separate from Clerk
-  // Checked via a dedicated server function with credentials
+  const request = getRequest()
+  const cookieHeader = request.headers.get('cookie') ?? ''
+  const match = cookieHeader.match(/(?:^|;\s*)sa_token=([^;]+)/)
+  const token = match?.[1]
+
+  if (!token) throw new Error('Super admin authentication required')
+
+  try {
+    return await verifySuperAdminToken(token)
+  } catch {
+    throw new Error('Invalid or expired super admin session')
+  }
 }
 ```
+
+**Important:** Use `getRequest()` (not `getWebRequest`) from `@tanstack/react-start/server` for accessing raw request headers.
 
 ## Client-Side Setup
 
@@ -247,13 +259,48 @@ const event = wh.verify(payload, {
 CLERK_SECRET_KEY=sk_live_...
 VITE_CLERK_PUBLISHABLE_KEY=pk_live_...
 CLERK_WEBHOOK_SECRET=whsec_...
+
+# Super Admin JWT auth
+SUPER_ADMIN_JWT_SECRET=generate-a-random-256-bit-secret
 ```
+
+**Important:** `SUPER_ADMIN_JWT_SECRET` must NOT have a `VITE_` prefix — it is server-only.
 
 ## Super Admin Authentication
 
-Super Admin auth is **separate from Clerk** to maintain a distinct security boundary for platform-level operations. It uses:
+Super Admin auth is **separate from Clerk** to maintain a distinct security boundary for platform-level operations.
 
-- A `SuperAdmin` model in the database with hashed passwords (argon2)
-- A dedicated login page at `/super-admin/login`
-- Session-based or token-based auth checked in server functions
-- No access to client product data by default
+### Implementation
+
+- **Password storage**: Argon2 hashing via the `argon2` package
+- **JWT tokens**: Created/verified with `jose` library (HS256 algorithm, 8-hour expiry)
+- **Cookie**: `sa_token` — httpOnly, Secure, SameSite=Strict, Path=/, Max-Age=28800
+- **Secret**: `SUPER_ADMIN_JWT_SECRET` environment variable
+- **Login page**: `/super-admin/login`
+- **Session check**: `beforeLoad` in `super-admin.tsx` calls `verifySuperAdminSession()`, redirects to login if invalid
+- **Route guard**: All super admin server functions in `clients.ts` call `requireSuperAdmin()` before executing
+
+### Server Functions
+
+| Function | Method | Purpose |
+|----------|--------|---------|
+| `superAdminLogin` | POST | Verify credentials, return JWT + set cookie |
+| `superAdminLogout` | POST | Clear `sa_token` cookie |
+| `verifySuperAdminSession` | GET | Read cookie, verify JWT, return auth status |
+
+### JWT Payload
+
+```typescript
+interface SuperAdminJwtPayload {
+  superAdminId: string
+  email: string
+}
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/lib/jwt.server.ts` | `createSuperAdminToken()` and `verifySuperAdminToken()` |
+| `src/lib/auth.server.ts` | `requireSuperAdmin()` helper |
+| `src/server/functions/auth.ts` | Login, logout, session verification server functions |

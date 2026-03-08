@@ -1,88 +1,178 @@
-import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
+import { auth } from '@clerk/tanstack-react-start/server'
+import { getCookie, setCookie } from '@tanstack/start-server-core'
 import { prisma } from './prisma'
+import type { OrgRole } from '../generated/prisma/client/enums'
 
+const GUEST_DEMO_COOKIE = 'guest_demo_client_id'
+/** Sentinel userId returned for unauthenticated guest demo access. */
+export const GUEST_USER_ID = '__guest__'
+
+/**
+ * Basic Clerk auth — returns userId only.
+ */
 export async function requireAuth() {
-  const { userId, orgId, orgRole } = await auth()
+  const { userId } = await auth()
   if (!userId) throw new Error('Not authenticated')
-  return { userId, orgId, orgRole }
+  return { userId }
 }
 
-export async function requireClientAuth() {
-  const { userId, orgId, orgRole } = await requireAuth()
-  if (!orgId) throw new Error('No organization selected')
+/**
+ * Optional Clerk auth — returns userId or null (does not throw).
+ */
+export async function optionalAuth() {
+  const { userId } = await auth()
+  return { userId }
+}
 
-  let client = await prisma.client.findUnique({
-    where: { clerkOrgId: orgId },
-    select: { id: true, status: true },
+/**
+ * Ensure an AppUser record exists for the authenticated Clerk user.
+ * First user to log in becomes super admin.
+ */
+export async function requireAppUser() {
+  const { userId: clerkUserId } = await requireAuth()
+
+  let appUser = await prisma.appUser.findUnique({
+    where: { clerkUserId },
   })
 
-  // Auto-provision Client if Clerk org exists but DB record doesn't yet
-  // (handles webhook race condition and local dev without tunnel)
+  if (!appUser) {
+    // First user ever becomes super admin
+    const isFirst = (await prisma.appUser.count()) === 0
+    appUser = await prisma.appUser.create({
+      data: { clerkUserId, isSuperAdmin: isFirst },
+    })
+  }
+
+  return appUser
+}
+
+/**
+ * Full org-scoped auth. Resolves the active client from AppUser.activeClientId,
+ * from an explicit slug parameter, or from a guest demo cookie.
+ *
+ * Guest users (unauthenticated) can access demo orgs with VIEWER role.
+ * A cookie tracks the demo org for subsequent server function calls.
+ */
+export async function requireClientAuth(opts?: { slug?: string }) {
+  const { userId: clerkUserId } = await optionalAuth()
+
+  let client
+  let appUser = null
+
+  if (opts?.slug) {
+    // Resolve by slug (works for both authenticated and guest users)
+    client = await prisma.client.findUnique({
+      where: { slug: opts.slug },
+      select: { id: true, status: true, isDemo: true },
+    })
+  } else if (clerkUserId) {
+    // Authenticated user: resolve by activeClientId
+    appUser = await getOrCreateAppUser(clerkUserId)
+    if (appUser.activeClientId) {
+      client = await prisma.client.findUnique({
+        where: { id: appUser.activeClientId },
+        select: { id: true, status: true, isDemo: true },
+      })
+    }
+  } else {
+    // Guest user: try demo cookie
+    const guestClientId = getCookie(GUEST_DEMO_COOKIE)
+    if (guestClientId) {
+      client = await prisma.client.findUnique({
+        where: { id: guestClientId },
+        select: { id: true, status: true, isDemo: true },
+      })
+      // Only allow demo orgs via cookie
+      if (client && !client.isDemo) client = null
+    }
+  }
+
   if (!client) {
-    const clerkOrg = await clerkClient().organizations.getOrganization({
-      organizationId: orgId,
+    if (!clerkUserId) throw new Error('Not authenticated')
+    throw new Error('No organization selected')
+  }
+  if (client.status !== 'ACTIVE') throw new Error('Organization is not active')
+
+  // Demo org: all users (including guests) get VIEWER access
+  if (client.isDemo) {
+    // Set cookie so subsequent server function calls can resolve the demo org
+    setCookie(GUEST_DEMO_COOKIE, client.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24, // 24 hours
     })
 
-    client = await prisma.client.create({
-      data: {
-        name: clerkOrg.name,
-        slug: clerkOrg.slug!,
-        clerkOrgId: orgId,
-        status: 'ACTIVE',
-      },
-      select: { id: true, status: true },
-    })
+    if (clerkUserId) {
+      if (!appUser) appUser = await getOrCreateAppUser(clerkUserId)
+      return {
+        userId: appUser.id,
+        clientId: client.id,
+        role: 'VIEWER' as OrgRole,
+        isDemo: true,
+        isGuest: false,
+        appUser,
+      }
+    }
+
+    return {
+      userId: GUEST_USER_ID,
+      clientId: client.id,
+      role: 'VIEWER' as OrgRole,
+      isDemo: true,
+      isGuest: true,
+      appUser: null,
+    }
   }
 
-  if (client.status !== 'ACTIVE') {
-    throw new Error('Client not found or inactive')
-  }
+  // Non-demo orgs require authentication
+  if (!clerkUserId) throw new Error('Not authenticated')
+  if (!appUser) appUser = await getOrCreateAppUser(clerkUserId)
 
-  // Auto-provision ClientUser if missing
-  let clientUser = await prisma.clientUser.findUnique({
-    where: {
-      clerkUserId_clientId: { clerkUserId: userId, clientId: client.id },
-    },
+  // Check membership
+  const membership = await prisma.clientUser.findUnique({
+    where: { userId_clientId: { userId: appUser.id, clientId: client.id } },
     select: { role: true },
   })
 
-  if (!clientUser) {
-    const role = mapClerkRole(orgRole)
-    clientUser = await prisma.clientUser.create({
-      data: {
-        clerkUserId: userId,
-        clientId: client.id,
-        role,
-      },
-      select: { role: true },
+  if (!membership) throw new Error('Not a member of this organization')
+
+  return {
+    userId: appUser.id,
+    clientId: client.id,
+    role: membership.role,
+    isDemo: false,
+    isGuest: false,
+    appUser,
+  }
+}
+
+/**
+ * Helper to get or create an AppUser for a Clerk user ID.
+ */
+async function getOrCreateAppUser(clerkUserId: string) {
+  let appUser = await prisma.appUser.findUnique({
+    where: { clerkUserId },
+  })
+
+  if (!appUser) {
+    const isFirst = (await prisma.appUser.count()) === 0
+    appUser = await prisma.appUser.create({
+      data: { clerkUserId, isSuperAdmin: isFirst },
     })
   }
 
-  return {
-    userId,
-    orgId,
-    orgRole,
-    clientId: client.id,
-    clientUserRole: clientUser.role,
-  }
+  return appUser
 }
 
-function mapClerkRole(
-  clerkRole: string | undefined,
-): 'CLIENT_ADMIN' | 'CLIENT_USER' | 'CLIENT_VIEWER' {
-  switch (clerkRole) {
-    case 'org:admin':
-      return 'CLIENT_ADMIN'
-    case 'org:member':
-      return 'CLIENT_USER'
-    default:
-      return 'CLIENT_VIEWER'
-  }
-}
-
+/**
+ * Require the current Clerk user to be a super admin.
+ */
 export async function requireSuperAdmin() {
-  // Super admin auth is separate from Clerk
-  // This will be implemented with session/token-based auth
-  // For now, throw an error as placeholder
-  throw new Error('Super admin auth not yet implemented')
+  const appUser = await requireAppUser()
+  if (!appUser.isSuperAdmin) {
+    throw new Error('Super admin access required')
+  }
+  return appUser
 }

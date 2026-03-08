@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Settings, Bell, Palette, Shield } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
+import { Badge } from '~/components/ui/badge'
 
 export const Route = createFileRoute('/_authed/$orgSlug/settings')({
   component: SettingsPage,
@@ -7,95 +9,105 @@ export const Route = createFileRoute('/_authed/$orgSlug/settings')({
 
 function SettingsPage() {
   const { orgSlug } = Route.useParams()
-  const parentData = Route.useRouteContext()
+  const { role, isDemo } = Route.useRouteContext()
 
   return (
     <div className="space-y-8">
-      {/* Page header */}
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          Settings
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h2 className="page-heading">Settings</h2>
+        <p className="mt-1.5 text-sm text-muted-foreground">
           Manage your organization settings and preferences.
         </p>
       </div>
 
-      {/* Organization info card */}
-      <div className="rounded-lg border border-border bg-card p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <Settings className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-card-foreground">
-              Organization
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              General organization information
-            </p>
-          </div>
-        </div>
-
-        <dl className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <dt className="text-sm font-medium text-muted-foreground">
-              Organization Slug
-            </dt>
-            <dd className="text-sm font-mono text-foreground">{orgSlug}</dd>
-          </div>
-          <div className="space-y-1">
-            <dt className="text-sm font-medium text-muted-foreground">
-              Your Role
-            </dt>
-            <dd className="text-sm text-foreground">
-              <span className="inline-flex rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-                Member
-              </span>
-            </dd>
-          </div>
-        </dl>
-      </div>
-
-      {/* Upcoming settings sections */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-lg border border-dashed border-border bg-card/50 p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-              <Palette className="h-4 w-4 text-muted-foreground" />
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl brand-tint">
+              <Settings className="h-5 w-5 text-primary" />
             </div>
-            <h4 className="font-medium text-foreground">Branding</h4>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Customize your organization's logo, colors, and branding. Coming
-            soon.
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-dashed border-border bg-card/50 p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-              <Bell className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <CardTitle className="text-base font-heading">Organization</CardTitle>
+              <CardDescription>General organization information</CardDescription>
             </div>
-            <h4 className="font-medium text-foreground">Notifications</h4>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Configure email and in-app notification preferences. Coming soon.
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-dashed border-border bg-card/50 p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-              <Shield className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <dl className="grid gap-5 sm:grid-cols-2">
+            <div className="rounded-xl bg-muted/40 p-4">
+              <dt className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Organization Slug
+              </dt>
+              <dd className="text-sm font-mono font-medium text-foreground">{orgSlug}</dd>
             </div>
-            <h4 className="font-medium text-foreground">Security</h4>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Manage authentication policies, SSO, and access controls. Coming
-            soon.
-          </p>
-        </div>
+            <div className="rounded-xl bg-muted/40 p-4">
+              <dt className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Your Role
+              </dt>
+              <dd>
+                <Badge className="bg-primary/10 text-primary">
+                  {role}
+                </Badge>
+                {isDemo && (
+                  <Badge variant="secondary" className="ml-2">
+                    Read-only
+                  </Badge>
+                )}
+              </dd>
+            </div>
+          </dl>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {[
+          {
+            icon: Palette,
+            title: 'Branding',
+            description: 'Customize your organization\'s logo, colors, and branding.',
+            color: 'text-violet-500',
+            bg: 'bg-violet-500/10',
+          },
+          {
+            icon: Bell,
+            title: 'Notifications',
+            description: 'Configure email and in-app notification preferences.',
+            color: 'text-amber-500',
+            bg: 'bg-amber-500/10',
+          },
+          {
+            icon: Shield,
+            title: 'Security',
+            description: 'Manage authentication policies and access controls.',
+            color: 'text-emerald-500',
+            bg: 'bg-emerald-500/10',
+          },
+        ].map((section) => {
+          const Icon = section.icon
+          return (
+            <Card
+              key={section.title}
+              className="border-2 border-dashed border-border/50 bg-card/50"
+            >
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${section.bg}`}>
+                    <Icon className={`h-4.5 w-4.5 ${section.color}`} />
+                  </div>
+                  <CardTitle className="font-heading">{section.title}</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {section.description}
+                </p>
+                <p className="mt-3 text-xs font-medium text-muted-foreground/60">
+                  Coming soon
+                </p>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
     </div>
   )

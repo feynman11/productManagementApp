@@ -134,10 +134,19 @@ PENDING_SETUP → ACTIVE → SUSPENDED → INACTIVE
 
 The Super Admin operates **outside** Clerk's tenant model:
 
-- Separate authentication (email + password with argon2)
-- Dedicated routes under `/_authed/_super-admin/`
+- Separate authentication (email + password with argon2, JWT via `jose`)
+- JWT stored in httpOnly cookie `sa_token` (HS256, 8h expiry)
+- Dedicated routes under `/_authed/super-admin/` with `beforeLoad` session guard
+- All client management server functions call `requireSuperAdmin()` before executing
 - Can view/manage all Client records but cannot access client product data
 - Can provision/deprovision Clerk Organizations
+
+## Notification Data Isolation
+
+The `Notification` model follows the same multi-tenancy pattern:
+- Has `clientId` foreign key and `@@index([recipientId, clientId])`
+- All notification queries in `src/server/functions/notifications.ts` scope by both `userId` AND `clientId`
+- Notification triggers in `ideas.ts` and `issues.ts` pass `clientId` when creating notifications
 
 ## Data Segregation Checklist
 
@@ -148,3 +157,4 @@ For every new model added to the schema:
 - [ ] Add `clientId` to relevant unique constraints
 - [ ] Ensure all server functions include `clientId` in queries
 - [ ] Add `Client` relation to the model's `Client` model relations list
+- [ ] If adding notification triggers, ensure `clientId` is passed to `createNotification()`

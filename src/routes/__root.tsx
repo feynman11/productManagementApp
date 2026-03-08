@@ -11,8 +11,8 @@ import { ThemeProvider } from '~/components/theme-provider'
 import appCss from '~/styles/app.css?url'
 
 const fetchClerkAuth = createServerFn({ method: 'GET' }).handler(async () => {
-  const { userId, orgId, orgSlug } = await auth()
-  return { userId, orgId: orgId ?? null, orgSlug: orgSlug ?? null }
+  const { userId } = await auth()
+  return { userId }
 })
 
 export const Route = createRootRoute({
@@ -22,11 +22,19 @@ export const Route = createRootRoute({
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { title: 'ProductPlan' },
     ],
-    links: [{ rel: 'stylesheet', href: appCss }],
+    links: [
+      { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+      { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' as const },
+      {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap',
+      },
+      { rel: 'stylesheet', href: appCss },
+    ],
   }),
   beforeLoad: async () => {
-    const { userId, orgId, orgSlug } = await fetchClerkAuth()
-    return { userId, orgId, orgSlug }
+    const { userId } = await fetchClerkAuth()
+    return { userId }
   },
   component: RootComponent,
 })
@@ -49,7 +57,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="min-h-screen">
         {children}
         <Scripts />
       </body>

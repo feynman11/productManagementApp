@@ -125,7 +125,7 @@ tests/
 │   │   └── organization.spec.ts
 │   ├── super-admin/
 │   │   ├── client-management.spec.ts
-│   │   └── login.spec.ts
+│   │   └── login.spec.ts          # Valid login, session persistence
 │   ├── products/
 │   │   ├── product-crud.spec.ts
 │   │   └── product-list.spec.ts
@@ -139,17 +139,37 @@ tests/
 │   ├── issues/
 │   │   ├── issue-crud.spec.ts
 │   │   └── issue-assignment.spec.ts
+│   ├── notifications/
+│   │   └── notification-flow.spec.ts  # Bell icon, mark read, mark all read
+│   ├── export/
+│   │   └── export-flow.spec.ts        # CSV download, PDF download
 │   ├── data-segregation/
 │   │   └── tenant-isolation.spec.ts
 │   └── fixtures/
 │       ├── auth.fixture.ts        # Clerk auth helpers
 │       └── seed.fixture.ts        # Test data seeding
 ├── unit/
-│   ├── permissions.test.ts
-│   ├── rice-score.test.ts
-│   └── utils.test.ts
+│   ├── permissions.test.ts        # 12 tests — RBAC role checking
+│   ├── rice-score.test.ts         # 15 tests — RICE calculation
+│   ├── status-mapping.test.ts     # 31 tests — Status config mapping
+│   ├── utils.test.ts              # 7 tests — cn() utility
+│   ├── jwt.test.ts                # 7 tests — Token creation, verification, expiry, tampering
+│   ├── export.test.ts             # 18 tests — CSV escaping, row generation, null handling
+│   └── notifications.test.ts      # 10 tests — Type enum coverage, message formatting
 └── playwright.config.ts
 ```
+
+### Unit Test Coverage (100 tests)
+
+| File | Tests | Coverage Area |
+|------|-------|--------------|
+| `permissions.test.ts` | 12 | Role hierarchy, canWrite, canAdmin |
+| `rice-score.test.ts` | 15 | RICE score calculation, edge cases |
+| `status-mapping.test.ts` | 31 | Status badge config for all statuses |
+| `utils.test.ts` | 7 | cn() class merging |
+| `jwt.test.ts` | 7 | JWT creation, verification, expiry, tampering |
+| `export.test.ts` | 18 | CSV field escaping, row generation, null handling |
+| `notifications.test.ts` | 10 | Notification type enum, message formatting |
 
 ## CI Integration
 

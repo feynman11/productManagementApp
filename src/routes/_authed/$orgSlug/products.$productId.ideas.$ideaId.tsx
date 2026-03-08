@@ -21,7 +21,16 @@ import { CommentThread } from '~/components/common/comment-thread'
 import { RiceScoreCard } from '~/components/ideas/rice-score-card'
 import { IdeaVoteButton } from '~/components/ideas/idea-vote-button'
 import { canWrite, canAdmin } from '~/lib/permissions'
-import { cn } from '~/lib/utils'
+import { Button } from '~/components/ui/button'
+import { Badge } from '~/components/ui/badge'
+import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from '~/components/ui/select'
 
 export const Route = createFileRoute(
   '/_authed/$orgSlug/products/$productId/ideas/$ideaId',
@@ -57,11 +66,11 @@ const IDEA_STATUSES = [
 function IdeaDetailPage() {
   const { idea, roadmaps } = Route.useLoaderData()
   const { orgSlug, productId, ideaId } = Route.useParams()
-  const parentData = Route.useRouteContext() as { clientUserRole?: string }
+  const { role, isDemo } = Route.useRouteContext() as { role?: string; isDemo?: boolean }
   const navigate = useNavigate()
 
-  const userCanWrite = canWrite(parentData.clientUserRole as any)
-  const userCanAdmin = canAdmin(parentData.clientUserRole as any)
+  const userCanWrite = canWrite(role as any, isDemo)
+  const userCanAdmin = canAdmin(role as any, isDemo)
 
   const [changingStatus, setChangingStatus] = useState(false)
   const [promoting, setPromoting] = useState(false)
@@ -132,122 +141,140 @@ function IdeaDetailPage() {
   return (
     <div className="space-y-6">
       {/* Back button + header */}
-      <div className="flex items-start gap-3">
-        <button
-          onClick={() =>
-            navigate({
-              to: '/$orgSlug/products/$productId/ideas',
-              params: { orgSlug, productId },
-            })
-          }
-          className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          aria-label="Back to ideas"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <div className="flex-1">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-bold tracking-tight text-foreground">
-              {idea.title}
-            </h2>
-            <div className="flex items-center gap-2">
-              <StatusBadge status={idea.status} />
-              <IdeaVoteButton
-                votes={idea.votes}
-                onVote={handleVote}
-                canVote={userCanWrite}
-              />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="mt-0.5 shrink-0"
+            aria-label="Back to ideas"
+            onClick={() =>
+              navigate({
+                to: '/$orgSlug/products/$productId/ideas',
+                params: { orgSlug, productId },
+              })
+            }
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h2 className="page-heading">{idea.title}</h2>
+            {/* Meta info */}
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
+                  <User className="h-3 w-3 text-primary" />
+                </div>
+                {idea.authorId.slice(0, 12)}...
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" />
+                {formatDate(idea.createdAt)}
+              </span>
+              {idea.tags && idea.tags.length > 0 && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Tag className="h-3.5 w-3.5" />
+                  {idea.tags.map((t: any) => t.name).join(', ')}
+                </span>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* Meta info */}
-          <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <User className="h-3.5 w-3.5" />
-              {idea.authorId.slice(0, 12)}...
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5" />
-              {formatDate(idea.createdAt)}
-            </span>
-            {idea.tags && idea.tags.length > 0 && (
-              <span className="inline-flex items-center gap-1">
-                <Tag className="h-3.5 w-3.5" />
-                {idea.tags.map((t: any) => t.name).join(', ')}
-              </span>
-            )}
-          </div>
+        {/* Status + Vote */}
+        <div className="flex items-center gap-3">
+          <StatusBadge status={idea.status} />
+          <IdeaVoteButton
+            votes={idea.votes}
+            onVote={handleVote}
+            canVote={userCanWrite}
+          />
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-3">
         {/* Main content */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-5">
           {/* Description */}
-          <div className="rounded-lg border border-border bg-card p-5">
-            <h3 className="mb-3 text-sm font-semibold text-card-foreground">
-              Description
-            </h3>
-            <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
-              {idea.description}
-            </p>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                Description
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                {idea.description}
+              </p>
+            </CardContent>
+          </Card>
 
           {/* Tags */}
           {idea.tags && idea.tags.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {idea.tags.map((tag: any) => (
-                <span
+                <Badge
                   key={tag.id}
-                  className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground"
+                  variant="outline"
+                  className="bg-primary/8 text-primary border-primary/15"
                 >
                   <Tag className="h-3 w-3" />
                   {tag.name}
-                </span>
+                </Badge>
               ))}
             </div>
           )}
 
           {/* Comments */}
-          <div className="rounded-lg border border-border bg-card p-5">
-            <CommentThread
-              comments={idea.comments.map((c: any) => ({
-                id: c.id,
-                content: c.content,
-                authorId: c.authorId,
-                createdAt: c.createdAt,
-              }))}
-              onAddComment={handleAddComment}
-              canComment={userCanWrite}
-            />
-          </div>
+          <Card>
+            <CardContent>
+              <CommentThread
+                comments={idea.comments.map((c: any) => ({
+                  id: c.id,
+                  content: c.content,
+                  authorId: c.authorId,
+                  createdAt: c.createdAt,
+                }))}
+                onAddComment={handleAddComment}
+                canComment={userCanWrite}
+              />
+            </CardContent>
+          </Card>
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* Status change */}
           {userCanAdmin && (
-            <div className="rounded-lg border border-border bg-card p-4">
-              <h3 className="mb-3 text-sm font-semibold text-card-foreground">
-                Status
-              </h3>
-              <select
-                value={idea.status}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                disabled={changingStatus}
-                className={cn(
-                  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  'disabled:opacity-50',
-                )}
-              >
-                {IDEA_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace(/_/g, ' ')}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2.5 text-sm font-heading">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg brand-tint">
+                    <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+                  </div>
+                  Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Select
+                  value={idea.status}
+                  onValueChange={handleStatusChange}
+                  disabled={changingStatus}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {IDEA_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s.replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
           )}
 
           {/* RICE Score */}
@@ -266,49 +293,63 @@ function IdeaDetailPage() {
             roadmaps.length > 0 &&
             idea.status !== 'PLANNED' &&
             idea.status !== 'COMPLETED' && (
-              <div className="rounded-lg border border-border bg-card p-4">
-                <h3 className="mb-3 text-sm font-semibold text-card-foreground">
-                  Promote to Roadmap
-                </h3>
-                {showPromote ? (
-                  <div className="space-y-3">
-                    <select
-                      value={selectedRoadmapId}
-                      onChange={(e) => setSelectedRoadmapId(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {roadmaps.map((rm: any) => (
-                        <option key={rm.id} value={rm.id}>
-                          {rm.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handlePromote}
-                        disabled={promoting || !selectedRoadmapId}
-                        className="inline-flex h-8 flex-1 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-                      >
-                        {promoting ? 'Promoting...' : 'Confirm'}
-                      </button>
-                      <button
-                        onClick={() => setShowPromote(false)}
-                        className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent"
-                      >
-                        Cancel
-                      </button>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2.5 text-sm font-heading">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
+                      <ArrowRightCircle className="h-4 w-4 text-emerald-500" />
                     </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowPromote(true)}
-                    className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-input bg-background text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                  >
-                    <ArrowRightCircle className="h-4 w-4" />
                     Promote to Roadmap
-                  </button>
-                )}
-              </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {showPromote ? (
+                    <div className="space-y-3">
+                      <Select
+                        value={selectedRoadmapId}
+                        onValueChange={setSelectedRoadmapId}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roadmaps.map((rm: any) => (
+                            <SelectItem key={rm.id} value={rm.id}>
+                              {rm.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handlePromote}
+                          disabled={promoting || !selectedRoadmapId}
+                          className="flex-1"
+                        >
+                          {promoting ? 'Promoting...' : 'Confirm'}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setShowPromote(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => setShowPromote(true)}
+                    >
+                      <ArrowRightCircle className="h-4 w-4" />
+                      Promote to Roadmap
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
             )}
         </div>
       </div>

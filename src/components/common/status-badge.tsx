@@ -1,59 +1,64 @@
+import { Badge } from '~/components/ui/badge'
 import { cn } from '~/lib/utils'
 
 interface StatusBadgeProps {
   status: string
-  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info'
   className?: string
 }
 
-const STATUS_VARIANT_MAP: Record<string, StatusBadgeProps['variant']> = {
-  // Success / green
-  ACTIVE: 'success',
-  COMPLETED: 'success',
-  RELEASED: 'success',
-  RESOLVED: 'success',
-  CLOSED: 'success',
-  // Info / blue
-  DRAFT: 'info',
-  PLANNED: 'info',
-  BACKLOG: 'info',
-  SUBMITTED: 'info',
-  UNDER_REVIEW: 'info',
-  // Warning / amber
-  IN_PROGRESS: 'warning',
-  // Danger / red
-  CRITICAL: 'danger',
-  OPEN: 'danger',
-  // Default / gray
-  ARCHIVED: 'default',
-  CANCELLED: 'default',
-  SUSPENDED: 'default',
-  WONT_FIX: 'default',
-  REJECTED: 'default',
-  DUPLICATE: 'default',
+const STATUS_VARIANT_MAP: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  ACTIVE: 'default',
+  COMPLETED: 'default',
+  RELEASED: 'default',
+  RESOLVED: 'default',
+  CLOSED: 'secondary',
+  DRAFT: 'outline',
+  PLANNED: 'outline',
+  BACKLOG: 'outline',
+  SUBMITTED: 'outline',
+  UNDER_REVIEW: 'outline',
+  IN_PROGRESS: 'secondary',
+  CRITICAL: 'destructive',
+  OPEN: 'destructive',
+  ARCHIVED: 'secondary',
+  CANCELLED: 'secondary',
+  SUSPENDED: 'destructive',
+  WONT_FIX: 'secondary',
+  REJECTED: 'secondary',
+  DUPLICATE: 'secondary',
+  PENDING_SETUP: 'outline',
+  INACTIVE: 'secondary',
 }
 
-const VARIANT_STYLES: Record<string, string> = {
-  default: 'bg-gray-500/10 text-gray-700 dark:text-gray-400',
-  success: 'bg-green-500/10 text-green-700 dark:text-green-400',
-  warning: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-  danger: 'bg-red-500/10 text-red-700 dark:text-red-400',
-  info: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+const STATUS_COLOR_MAP: Record<string, string> = {
+  ACTIVE: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
+  COMPLETED: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
+  RELEASED: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
+  RESOLVED: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
+  IN_PROGRESS: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
+  PLANNED: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  BACKLOG: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  SUBMITTED: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  UNDER_REVIEW: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  OPEN: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+  CRITICAL: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
 }
 
-export function StatusBadge({ status, variant, className }: StatusBadgeProps) {
-  const resolvedVariant = variant ?? STATUS_VARIANT_MAP[status] ?? 'default'
+export function StatusBadge({ status, className }: StatusBadgeProps) {
+  const variant = STATUS_VARIANT_MAP[status] ?? 'secondary'
+  const colorClass = STATUS_COLOR_MAP[status]
   const label = status.replace(/_/g, ' ')
 
   return (
-    <span
+    <Badge
+      variant={variant}
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-        VARIANT_STYLES[resolvedVariant],
+        'text-[11px] font-medium',
+        colorClass,
         className,
       )}
     >
       {label}
-    </span>
+    </Badge>
   )
 }

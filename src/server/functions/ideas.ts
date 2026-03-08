@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '~/lib/prisma'
 import { requireClientAuth } from '~/lib/auth.server'
 import { canWrite, canAdmin } from '~/lib/permissions'
+import { createNotification } from '~/lib/notifications.server'
 
 // ──────────────────────────────────────────────────────
 // Ideas — Server Functions
@@ -102,8 +103,8 @@ export const createIdea = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole, userId } = await requireClientAuth()
-    if (!canWrite(clientUserRole)) throw new Error('Insufficient permissions')
+    const { clientId, role, isDemo, userId } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
 
     // Verify product belongs to client
     const product = await prisma.product.findFirst({
@@ -146,8 +147,8 @@ export const updateIdea = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole } = await requireClientAuth()
-    if (!canWrite(clientUserRole)) throw new Error('Insufficient permissions')
+    const { clientId, role, isDemo } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
 
     const { ideaId, ...updateData } = data
 
@@ -190,8 +191,8 @@ export const updateIdeaStatus = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole } = await requireClientAuth()
-    if (!canAdmin(clientUserRole))
+    const { clientId, role, isDemo, userId } = await requireClientAuth()
+    if (!canAdmin(role, isDemo))
       throw new Error('Admin permission required')
 
     const existing = await prisma.idea.findFirst({
@@ -199,27 +200,55 @@ export const updateIdeaStatus = createServerFn({ method: 'POST' })
     })
     if (!existing) throw new Error('Idea not found')
 
-    return prisma.idea.update({
+    const updated = await prisma.idea.update({
       where: { id: data.ideaId },
       data: { status: data.status },
     })
+
+    // Notify idea author about status change
+    if (existing.authorId !== userId) {
+      createNotification({
+        type: 'IDEA_STATUS_CHANGED',
+        title: 'Idea status updated',
+        message: `"${existing.title}" status changed to ${data.status.replace(/_/g, ' ').toLowerCase()}`,
+        recipientId: existing.authorId,
+        clientId,
+        ideaId: data.ideaId,
+      }).catch(() => {})
+    }
+
+    return updated
   })
 
 export const voteIdea = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ ideaId: z.string() }))
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole } = await requireClientAuth()
-    if (!canWrite(clientUserRole)) throw new Error('Insufficient permissions')
+    const { clientId, role, isDemo, userId } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
 
     const existing = await prisma.idea.findFirst({
       where: { id: data.ideaId, clientId },
     })
     if (!existing) throw new Error('Idea not found')
 
-    return prisma.idea.update({
+    const updated = await prisma.idea.update({
       where: { id: data.ideaId },
       data: { votes: { increment: 1 } },
     })
+
+    // Notify idea author about the vote (don't notify self)
+    if (existing.authorId !== userId) {
+      createNotification({
+        type: 'IDEA_VOTED',
+        title: 'Your idea received a vote',
+        message: `Someone voted for "${existing.title}"`,
+        recipientId: existing.authorId,
+        clientId,
+        ideaId: data.ideaId,
+      }).catch(() => {}) // fire-and-forget
+    }
+
+    return updated
   })
 
 export const addIdeaComment = createServerFn({ method: 'POST' })
@@ -230,8 +259,8 @@ export const addIdeaComment = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole, userId } = await requireClientAuth()
-    if (!canWrite(clientUserRole)) throw new Error('Insufficient permissions')
+    const { clientId, role, isDemo, userId } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
 
     // Verify idea belongs to client
     const idea = await prisma.idea.findFirst({
@@ -239,13 +268,27 @@ export const addIdeaComment = createServerFn({ method: 'POST' })
     })
     if (!idea) throw new Error('Idea not found')
 
-    return prisma.comment.create({
+    const comment = await prisma.comment.create({
       data: {
         content: data.content,
         authorId: userId,
         ideaId: data.ideaId,
       },
     })
+
+    // Notify idea author about the comment (don't notify self)
+    if (idea.authorId !== userId) {
+      createNotification({
+        type: 'IDEA_COMMENTED',
+        title: 'New comment on your idea',
+        message: `Someone commented on "${idea.title}"`,
+        recipientId: idea.authorId,
+        clientId,
+        ideaId: data.ideaId,
+      }).catch(() => {})
+    }
+
+    return comment
   })
 
 export const promoteToRoadmap = createServerFn({ method: 'POST' })
@@ -256,8 +299,8 @@ export const promoteToRoadmap = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, clientUserRole } = await requireClientAuth()
-    if (!canAdmin(clientUserRole))
+    const { clientId, role, isDemo } = await requireClientAuth()
+    if (!canAdmin(role, isDemo))
       throw new Error('Admin permission required')
 
     // Verify idea belongs to client

@@ -59,7 +59,9 @@ const productsQuery = queryOptions({
 | Function | Method | Input | Output | Auth |
 |----------|--------|-------|--------|------|
 | `fetchClerkAuth` | GET | none | `{ userId }` | Public |
-| `superAdminLogin` | POST | `{ email, password }` | `{ token }` | Public |
+| `superAdminLogin` | POST | `{ email, password }` | `{ token, admin, setCookieHeader }` | Public |
+| `superAdminLogout` | POST | none | `{ setCookieHeader }` | Public |
+| `verifySuperAdminSession` | GET | none | `{ authenticated, superAdminId?, email? }` | Public |
 
 ### Super Admin: Clients
 
@@ -116,6 +118,32 @@ const productsQuery = queryOptions({
 | `updateIssue` | POST | `IssueUpdateInput` | `Issue` | Client User+ |
 | `assignIssue` | POST | `{ issueId, assigneeId }` | `Issue` | Client Admin |
 | `addIssueComment` | POST | `{ issueId, content }` | `Comment` | Client User+ |
+
+### Notifications
+
+| Function | Method | Input | Output | Auth |
+|----------|--------|-------|--------|------|
+| `getNotifications` | GET | `{ limit?, cursor? }` | `{ notifications }` | Client User+ |
+| `getUnreadCount` | GET | none | `{ count }` | Client User+ |
+| `markAsRead` | POST | `{ notificationId }` | `{ success }` | Client User+ |
+| `markAllAsRead` | POST | none | `{ success }` | Client User+ |
+
+### AI (OpenAI)
+
+| Function | Method | Input | Output | Auth |
+|----------|--------|-------|--------|------|
+| `detectDuplicateIdeas` | POST | `{ productId, title, description }` | `{ duplicates[] }` | Client User+ |
+| `analyzeIdeaSentiment` | POST | `{ ideaId }` | `{ sentiment, summary, score }` | Client Admin |
+| `generateReleaseNotes` | POST | `{ releaseId }` | `{ markdown }` | Client Admin |
+
+### Export
+
+| Function | Method | Input | Output | Auth |
+|----------|--------|-------|--------|------|
+| `exportProductsCsv` | GET | none | `{ csv, filename }` | Client User+ |
+| `exportIdeasCsv` | GET | `{ productId }` | `{ csv, filename }` | Client User+ |
+| `exportIssuesCsv` | GET | `{ productId }` | `{ csv, filename }` | Client User+ |
+| `exportRoadmapPdf` | GET | `{ roadmapId }` | `{ pdf (base64), filename }` | Client User+ |
 
 ### Webhooks
 

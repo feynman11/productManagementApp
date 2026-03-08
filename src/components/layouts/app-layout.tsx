@@ -1,69 +1,100 @@
 import { useState } from 'react'
-import { UserButton, OrganizationSwitcher } from '@clerk/tanstack-react-start'
-import { Menu } from 'lucide-react'
+import { UserButton, SignInButton } from '@clerk/tanstack-react-start'
+import { Menu, Eye, LogIn } from 'lucide-react'
 import { AppSidebar } from '~/components/layouts/app-sidebar'
+import { OrgSwitcher } from '~/components/common/org-switcher'
 import { ThemeToggle } from '~/components/common/theme-toggle'
-import { cn } from '~/lib/utils'
+import { NotificationBell } from '~/components/common/notification-bell'
+import { Button } from '~/components/ui/button'
+import { Separator } from '~/components/ui/separator'
+import { Badge } from '~/components/ui/badge'
+
+interface OrgInfo {
+  id: string
+  name: string
+  slug: string
+  isDemo: boolean
+  role: string
+}
 
 interface AppLayoutProps {
   orgSlug: string
+  isDemo?: boolean
+  isGuest?: boolean
+  userOrgs: OrgInfo[]
   children: React.ReactNode
 }
 
-export function AppLayout({ orgSlug, children }: AppLayoutProps) {
+export function AppLayout({ orgSlug, isDemo, isGuest, userOrgs, children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
     <div className="flex min-h-screen">
-      {/* Sidebar */}
       <AppSidebar
         orgSlug={orgSlug}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
 
-      {/* Main area */}
-      <div className="flex flex-1 flex-col">
-        {/* Header */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background px-4">
-          {/* Left side: hamburger + org switcher */}
+      <div className="flex flex-1 flex-col min-w-0">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/60 bg-background/80 backdrop-blur-xl px-4 lg:px-6">
           <div className="flex items-center gap-3">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
               onClick={() => setSidebarOpen(true)}
-              className={cn(
-                'inline-flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden',
-              )}
               aria-label="Open sidebar"
             >
-              <Menu className="h-4 w-4" />
-            </button>
-            <OrganizationSwitcher
-              hidePersonal
-              afterSelectOrganizationUrl="/:slug"
-              afterCreateOrganizationUrl="/:slug"
-              appearance={{
-                elements: {
-                  rootBox: 'flex items-center',
-                },
-              }}
-            />
+              <Menu className="h-5 w-5" />
+            </Button>
+            {isGuest ? (
+              <span className="text-sm font-medium text-foreground">Demo</span>
+            ) : (
+              <OrgSwitcher currentSlug={orgSlug} orgs={userOrgs} />
+            )}
           </div>
 
-          {/* Right side: theme toggle + user button */}
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <UserButton
-              appearance={{
-                elements: {
-                  avatarBox: 'h-8 w-8',
-                },
-              }}
-            />
+          <div className="flex items-center gap-2">
+            {isDemo && (
+              <Badge variant="outline" className="text-[10px] gap-1 text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700">
+                <Eye className="h-3 w-3" />
+                Read-only demo
+              </Badge>
+            )}
+            {isGuest ? (
+              <>
+                <ThemeToggle />
+                <Separator orientation="vertical" className="h-6 mx-1" />
+                <SignInButton mode="modal">
+                  <Button variant="default" size="sm" className="gap-1.5">
+                    <LogIn className="h-3.5 w-3.5" />
+                    Sign in
+                  </Button>
+                </SignInButton>
+              </>
+            ) : (
+              <>
+                <NotificationBell />
+                <ThemeToggle />
+                <Separator orientation="vertical" className="h-6 mx-1" />
+                <UserButton
+                  appearance={{
+                    elements: {
+                      avatarBox: 'h-8 w-8 rounded-lg',
+                    },
+                  }}
+                />
+              </>
+            )}
           </div>
         </header>
 
-        {/* Content area */}
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-4 lg:p-8">
+          <div className="mx-auto max-w-7xl">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   )

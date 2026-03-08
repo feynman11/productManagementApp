@@ -1,7 +1,17 @@
-import { createFileRoute, Link, Outlet } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router'
 import { ThemeToggle } from '~/components/common/theme-toggle'
+import { Badge } from '~/components/ui/badge'
+import { Separator } from '~/components/ui/separator'
+import { getUserContext } from '~/server/functions/auth'
 
 export const Route = createFileRoute('/_authed/super-admin')({
+  beforeLoad: async () => {
+    const ctx = await getUserContext()
+    if (!ctx.authenticated || !ctx.isSuperAdmin) {
+      throw redirect({ to: '/' })
+    }
+    return { isSuperAdmin: true }
+  },
   component: SuperAdminLayout,
 })
 
@@ -13,18 +23,20 @@ function SuperAdminLayout() {
           <Link to="/" className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-foreground">ProductPlan</h1>
           </Link>
-          <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+          <Badge variant="destructive" className="text-[10px]">
             Super Admin
-          </span>
+          </Badge>
         </div>
         <nav className="flex items-center gap-4">
           <Link
             to="/super-admin/clients"
+            search={{ page: 1 }}
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             activeProps={{ className: 'text-foreground font-medium' }}
           >
             Clients
           </Link>
+          <Separator orientation="vertical" className="h-5" />
           <ThemeToggle />
         </nav>
       </header>

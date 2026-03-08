@@ -8,11 +8,39 @@ import {
   ArrowUpDown,
   Filter,
   X,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react'
 import { getIdeas, createIdea } from '~/server/functions/ideas'
+import { exportIdeasCsv } from '~/server/functions/export'
+import { downloadFile } from '~/lib/download'
 import { StatusBadge } from '~/components/common/status-badge'
 import { canWrite } from '~/lib/permissions'
-import { cn } from '~/lib/utils'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
+import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
+import { Badge } from '~/components/ui/badge'
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from '~/components/ui/table'
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from '~/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '~/components/ui/dropdown-menu'
 
 export const Route = createFileRoute(
   '/_authed/$orgSlug/products/$productId/ideas/',
@@ -33,10 +61,10 @@ function formatDate(dateStr: string | Date) {
 function IdeasPage() {
   const ideas = Route.useLoaderData()
   const { orgSlug, productId } = Route.useParams()
-  const parentData = Route.useRouteContext() as { clientUserRole?: string }
+  const { role, isDemo } = Route.useRouteContext() as { role?: string; isDemo?: boolean }
   const navigate = useNavigate()
 
-  const userCanWrite = canWrite(parentData.clientUserRole as any)
+  const userCanWrite = canWrite(role as any, isDemo)
 
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [sortBy, setSortBy] = useState<string>('createdAt')
@@ -92,261 +120,305 @@ function IdeasPage() {
     }
   }
 
+  async function handleExportCsv() {
+    const result = await exportIdeasCsv({ data: { productId } })
+    downloadFile(result.csv, result.filename)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-lg font-semibold text-foreground">
-          Ideas ({ideas.length})
-        </h3>
-        {userCanWrite && (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Submit Idea
-          </button>
-        )}
+        <div>
+          <h3 className="page-heading">Ideas</h3>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Collect and prioritize product ideas ({ideas.length} total)
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Download className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportCsv}>
+                <FileSpreadsheet className="h-4 w-4" />
+                Export CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {userCanWrite && (
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4" />
+              Submit Idea
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Create form */}
       {showCreate && (
-        <div className="rounded-lg border border-border bg-card p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h4 className="text-base font-semibold text-card-foreground">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base font-heading">
               New Idea
-            </h4>
-            <button
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => {
                 setShowCreate(false)
                 setCreateError('')
               }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             >
               <X className="h-4 w-4" />
-            </button>
-          </div>
-          {createError && (
-            <div className="mb-4 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {createError}
-            </div>
-          )}
-          <form onSubmit={handleCreate} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Title <span className="text-destructive">*</span>
-              </label>
-              <input
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                required
-                maxLength={200}
-                placeholder="What is your idea?"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Description <span className="text-destructive">*</span>
-              </label>
-              <textarea
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-                required
-                rows={4}
-                placeholder="Describe your idea in detail..."
-                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Tags
-              </label>
-              <input
-                type="text"
-                value={newTags}
-                onChange={(e) => setNewTags(e.target.value)}
-                placeholder="Comma-separated tags (e.g., ux, performance, mobile)"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCreate(false)
-                  setCreateError('')
-                }}
-                className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={creating || !newTitle.trim() || !newDescription.trim()}
-                className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-              >
-                {creating ? 'Submitting...' : 'Submit Idea'}
-              </button>
-            </div>
-          </form>
-        </div>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {createError && (
+              <div className="mb-5 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                {createError}
+              </div>
+            )}
+            <form onSubmit={handleCreate} className="space-y-5">
+              <div className="space-y-2">
+                <label className="section-title">
+                  Title <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  required
+                  maxLength={200}
+                  placeholder="What is your idea?"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="section-title">
+                  Description <span className="text-destructive">*</span>
+                </label>
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  required
+                  rows={4}
+                  placeholder="Describe your idea in detail..."
+                  className="h-auto w-full min-w-0 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="section-title">
+                  Tags
+                </label>
+                <Input
+                  type="text"
+                  value={newTags}
+                  onChange={(e) => setNewTags(e.target.value)}
+                  placeholder="Comma-separated tags (e.g., ux, performance, mobile)"
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowCreate(false)
+                    setCreateError('')
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={creating || !newTitle.trim() || !newDescription.trim()}
+                >
+                  {creating ? 'Submitting...' : 'Submit Idea'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="SUBMITTED">Submitted</option>
-            <option value="UNDER_REVIEW">Under Review</option>
-            <option value="PLANNED">Planned</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="REJECTED">Rejected</option>
-            <option value="DUPLICATE">Duplicate</option>
-          </select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-auto">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Statuses</SelectItem>
+              <SelectItem value="SUBMITTED">Submitted</SelectItem>
+              <SelectItem value="UNDER_REVIEW">Under Review</SelectItem>
+              <SelectItem value="PLANNED">Planned</SelectItem>
+              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+              <SelectItem value="COMPLETED">Completed</SelectItem>
+              <SelectItem value="REJECTED">Rejected</SelectItem>
+              <SelectItem value="DUPLICATE">Duplicate</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex items-center gap-2">
           <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="createdAt">Newest First</option>
-            <option value="riceScore">RICE Score</option>
-            <option value="votes">Most Votes</option>
-          </select>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-auto">
+              <SelectValue placeholder="Newest First" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="createdAt">Newest First</SelectItem>
+              <SelectItem value="riceScore">RICE Score</SelectItem>
+              <SelectItem value="votes">Most Votes</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       {/* Ideas list */}
       {filteredIdeas.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16">
-          <Lightbulb className="mb-3 h-10 w-10 text-muted-foreground/50" />
+        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/60 py-20">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mb-4">
+            <Lightbulb className="h-6 w-6 text-muted-foreground" />
+          </div>
           <p className="text-sm font-medium text-muted-foreground">
             {ideas.length === 0
               ? 'No ideas yet'
               : 'No ideas match your filters'}
           </p>
+          {ideas.length === 0 && userCanWrite && (
+            <Button
+              size="sm"
+              onClick={() => setShowCreate(true)}
+              className="mt-5"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Submit your first idea
+            </Button>
+          )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
-          {/* Table header - hidden on mobile */}
-          <div className="hidden border-b border-border bg-muted/50 sm:grid sm:grid-cols-12 sm:gap-2 sm:px-4 sm:py-3">
-            <div className="col-span-4 text-xs font-medium text-muted-foreground">
-              Title
-            </div>
-            <div className="col-span-2 text-xs font-medium text-muted-foreground">
-              Status
-            </div>
-            <div className="col-span-2 text-xs font-medium text-muted-foreground text-right">
-              RICE Score
-            </div>
-            <div className="col-span-1 text-xs font-medium text-muted-foreground text-right">
-              Votes
-            </div>
-            <div className="col-span-3 text-xs font-medium text-muted-foreground text-right">
-              Created
-            </div>
-          </div>
-          <div className="divide-y divide-border">
+        <>
+          {/* Mobile card layout */}
+          <div className="flex flex-col gap-3 sm:hidden">
             {filteredIdeas.map((idea) => (
               <Link
                 key={idea.id}
                 to="/$orgSlug/products/$productId/ideas/$ideaId"
                 params={{ orgSlug, productId, ideaId: idea.id }}
-                className="block bg-card transition-colors hover:bg-muted/30"
+                className="block"
               >
-                {/* Mobile layout */}
-                <div className="flex flex-col gap-2 p-4 sm:hidden">
-                  <div className="flex items-start justify-between gap-2">
-                    <h4 className="text-sm font-medium text-foreground">
-                      {idea.title}
-                    </h4>
-                    <StatusBadge status={idea.status} />
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <ThumbsUp className="h-3 w-3" />
-                      {idea.votes}
-                    </span>
-                    {idea.riceScore != null && (
-                      <span>RICE: {idea.riceScore.toFixed(1)}</span>
-                    )}
-                    <span className="inline-flex items-center gap-1">
-                      <MessageSquare className="h-3 w-3" />
-                      {idea._count.comments}
-                    </span>
-                    <span>{formatDate(idea.createdAt)}</span>
-                  </div>
-                  {idea.tags && idea.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {idea.tags.map((tag: any) => (
-                        <span
-                          key={tag.id}
-                          className="inline-flex rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
-                        >
-                          {tag.name}
-                        </span>
-                      ))}
+                <Card className="transition-colors hover:bg-muted/30">
+                  <CardContent className="flex flex-col gap-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <h4 className="text-sm font-semibold text-foreground font-heading">
+                        {idea.title}
+                      </h4>
+                      <StatusBadge status={idea.status} />
                     </div>
-                  )}
-                </div>
-
-                {/* Desktop layout */}
-                <div className="hidden sm:grid sm:grid-cols-12 sm:items-center sm:gap-2 sm:px-4 sm:py-3">
-                  <div className="col-span-4">
-                    <h4 className="text-sm font-medium text-foreground truncate">
-                      {idea.title}
-                    </h4>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <ThumbsUp className="h-3 w-3" />
+                        {idea.votes}
+                      </span>
+                      {idea.riceScore != null && (
+                        <span>RICE: {idea.riceScore.toFixed(1)}</span>
+                      )}
+                      <span className="inline-flex items-center gap-1.5">
+                        <MessageSquare className="h-3 w-3" />
+                        {idea._count.comments}
+                      </span>
+                      <span>{formatDate(idea.createdAt)}</span>
+                    </div>
                     {idea.tags && idea.tags.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {idea.tags.slice(0, 3).map((tag: any) => (
-                          <span
-                            key={tag.id}
-                            className="inline-flex rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground"
-                          >
+                      <div className="flex flex-wrap gap-1.5">
+                        {idea.tags.map((tag: any) => (
+                          <Badge key={tag.id} variant="secondary">
                             {tag.name}
-                          </span>
+                          </Badge>
                         ))}
                       </div>
                     )}
-                  </div>
-                  <div className="col-span-2">
-                    <StatusBadge status={idea.status} />
-                  </div>
-                  <div className="col-span-2 text-right">
-                    <span className="text-sm font-medium text-foreground tabular-nums">
-                      {idea.riceScore != null
-                        ? idea.riceScore.toFixed(1)
-                        : '--'}
-                    </span>
-                  </div>
-                  <div className="col-span-1 text-right">
-                    <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-                      <ThumbsUp className="h-3 w-3" />
-                      {idea.votes}
-                    </span>
-                  </div>
-                  <div className="col-span-3 text-right">
-                    <span className="text-sm text-muted-foreground">
-                      {formatDate(idea.createdAt)}
-                    </span>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </Link>
             ))}
           </div>
-        </div>
+
+          {/* Desktop table layout */}
+          <Card className="hidden overflow-hidden sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[40%]">Title</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">RICE Score</TableHead>
+                  <TableHead className="text-right">Votes</TableHead>
+                  <TableHead className="text-right">Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredIdeas.map((idea) => (
+                  <TableRow
+                    key={idea.id}
+                    className="cursor-pointer"
+                    onClick={() =>
+                      navigate({
+                        to: '/$orgSlug/products/$productId/ideas/$ideaId',
+                        params: { orgSlug, productId, ideaId: idea.id },
+                      })
+                    }
+                  >
+                    <TableCell>
+                      <div>
+                        <span className="text-sm font-semibold text-foreground font-heading">
+                          {idea.title}
+                        </span>
+                        {idea.tags && idea.tags.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {idea.tags.slice(0, 3).map((tag: any) => (
+                              <Badge
+                                key={tag.id}
+                                variant="secondary"
+                                className="text-[10px] px-2 py-0"
+                              >
+                                {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={idea.status} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="text-sm font-semibold text-foreground tabular-nums">
+                        {idea.riceScore != null
+                          ? idea.riceScore.toFixed(1)
+                          : '--'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <ThumbsUp className="h-3.5 w-3.5" />
+                        {idea.votes}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="text-sm text-muted-foreground">
+                        {formatDate(idea.createdAt)}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </>
       )}
     </div>
   )

@@ -47,9 +47,11 @@ CLERK_SECRET_KEY="sk_test_..."
 VITE_CLERK_PUBLISHABLE_KEY="pk_test_..."
 CLERK_WEBHOOK_SIGNING_SECRET="whsec_..."
 
-# Super Admin credentials (dev only)
-SUPER_ADMIN_EMAIL="superadmin@productplan.com"
-SUPER_ADMIN_PASSWORD="change-me-in-production"
+# Super Admin JWT auth
+SUPER_ADMIN_JWT_SECRET="generate-a-random-256-bit-secret"
+
+# OpenAI (optional — enables AI features)
+OPENAI_API_KEY="sk-..."
 ```
 
 ### 3. Create the database
@@ -133,6 +135,10 @@ src/
     issues.ts              # Issue tracking, assignment
     clients.ts             # Super Admin client management
     auth.ts                # Authentication functions
+    notifications.ts       # In-app notification system
+    ai.ts                  # OpenAI integration (duplicates, sentiment, release notes)
+    export.ts              # CSV export (products, ideas, issues)
+    export-pdf.ts          # PDF export (roadmap)
   server/webhooks/         # Webhook processing logic
   components/
     ui/                    # Shadcn UI components
@@ -141,8 +147,12 @@ src/
     ideas/                 # Ideas-specific (RICE card, vote button)
   lib/
     prisma.ts              # Prisma client singleton
-    auth.server.ts         # Server-side auth helpers
+    auth.server.ts         # Server-side auth helpers (Clerk + Super Admin JWT)
+    jwt.server.ts          # Super Admin JWT creation/verification
+    openai.ts              # OpenAI client singleton
+    notifications.server.ts # Notification creation helpers
     permissions.ts         # RBAC role checking
+    download.ts            # Client-side file download helpers
     utils.ts               # cn() utility
   styles/app.css           # Tailwind v4 theme (OKLCH, dark mode)
 prisma/
@@ -152,6 +162,53 @@ tests/
   e2e/                     # Playwright E2E tests
   unit/                    # Vitest unit tests
 ```
+
+## Docker
+
+Run the entire stack (app + PostgreSQL) with Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+This starts:
+- **PostgreSQL 16** on port 5432
+- **ProductPlan app** on port 3000
+
+For a production build only:
+
+```bash
+docker build -t productplan .
+docker run -p 3000:3000 \
+  -e DATABASE_URL="postgresql://..." \
+  -e CLERK_SECRET_KEY="sk_..." \
+  -e VITE_CLERK_PUBLISHABLE_KEY="pk_..." \
+  -e SUPER_ADMIN_JWT_SECRET="your-secret" \
+  productplan
+```
+
+## Phase 8 Features
+
+### AI Integration (OpenAI)
+- **Duplicate detection**: When creating an idea, GPT-4o-mini scans for similar existing ideas
+- **Sentiment analysis**: Admins can analyze sentiment of an idea and its comments
+- **Release notes generation**: Auto-generate markdown release notes from roadmap items
+
+Requires `OPENAI_API_KEY` in `.env`.
+
+### Export
+- **CSV export** for Products, Ideas, and Issues lists (via dropdown menu on each page)
+- **PDF export** for Roadmap overviews (via export button on roadmap detail page)
+
+### In-App Notifications
+- Bell icon in the header shows unread count (polls every 30s)
+- Notifications triggered by: idea votes, idea status changes, idea/issue comments, issue assignments
+- Mark individual or all notifications as read
+
+### Super Admin JWT Auth
+- Secure JWT-based authentication (HS256, 8h expiry, httpOnly cookie)
+- Argon2 password verification
+- Session verification on every super admin route
 
 ## Development Workflow
 
@@ -217,7 +274,7 @@ VALUES (
 
 ### Option C: Via seed script
 
-The seed script (`bun run prisma:seed`) creates a placeholder super admin. Update `prisma/seed.ts` with a real argon2 hash before running in non-dev environments.
+The seed script (`bun run prisma:seed`) creates a super admin with argon2-hashed password (`admin123`). Change this in non-dev environments.
 
 ## Documentation
 

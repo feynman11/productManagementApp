@@ -31,7 +31,13 @@ The Roadmap module provides visual planning tools for product development. Each 
 - Toggle roadmap visibility (public/private)
 - Public roadmaps accessible without authentication (future)
 
-### Capacity Planning (Phase 6)
+### Export (Implemented)
+- **PDF export**: Download roadmap overview with items and releases as PDF (`exportRoadmapPdf` in `src/server/functions/export-pdf.ts`, uses `@react-pdf/renderer`)
+
+### AI Features (Implemented)
+- **Release notes generation**: Auto-generate markdown release notes from a release's roadmap items (`generateReleaseNotes` in `src/server/functions/ai.ts`, uses GPT-4o-mini)
+
+### Capacity Planning (Future)
 - Team capacity tracking per sprint/release
 - Load balancing visualization
 
@@ -98,6 +104,12 @@ src/server/functions/roadmap.ts
   ├── createRelease(roadmapId, data)                  → Release
   ├── updateRelease(id, data)                         → Release
   └── getPortfolioView(clientId)                      → Aggregated roadmap data
+
+src/server/functions/export-pdf.ts
+  └── exportRoadmapPdf(roadmapId)                     → { pdf (base64), filename }
+
+src/server/functions/ai.ts
+  └── generateReleaseNotes(releaseId)                  → { markdown }
 ```
 
 ## Routes

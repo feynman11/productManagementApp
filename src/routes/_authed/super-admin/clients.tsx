@@ -1,12 +1,25 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
+import { Plus, X, AlertCircle } from 'lucide-react'
 import {
   getClients,
   createClient,
   suspendClient,
 } from '~/server/functions/clients'
 import { cn } from '~/lib/utils'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
+import { Badge } from '~/components/ui/badge'
+import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from '~/components/ui/table'
 
 const searchSchema = z.object({
   page: z.number().int().positive().catch(1),
@@ -19,11 +32,11 @@ export const Route = createFileRoute('/_authed/super-admin/clients')({
   component: ClientsPage,
 })
 
-const STATUS_STYLES: Record<string, string> = {
-  ACTIVE: 'bg-green-500/10 text-green-700 dark:text-green-400',
-  INACTIVE: 'bg-gray-500/10 text-gray-700 dark:text-gray-400',
-  PENDING_SETUP: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  SUSPENDED: 'bg-red-500/10 text-red-700 dark:text-red-400',
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  ACTIVE: 'default',
+  INACTIVE: 'secondary',
+  PENDING_SETUP: 'outline',
+  SUSPENDED: 'destructive',
 }
 
 function ClientsPage() {
@@ -48,7 +61,6 @@ function ClientsPage() {
       setShowCreate(false)
       setNewName('')
       setNewSlug('')
-      // Refresh data by re-navigating to the same page
       navigate({ to: '/super-admin/clients', search: { page } })
     } catch (err: unknown) {
       const message =
@@ -65,7 +77,7 @@ function ClientsPage() {
       await suspendClient({ data: { clientId } })
       navigate({ to: '/super-admin/clients', search: { page } })
     } catch {
-      // Silently fail for now -- error handling will improve with toast notifications
+      // Silently fail for now
     }
   }
 
@@ -85,164 +97,154 @@ function ClientsPage() {
           <h2 className="text-2xl font-bold tracking-tight text-foreground">
             Clients
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage all client organizations ({data.total} total)
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
+        <Button onClick={() => setShowCreate(true)}>
+          <Plus className="h-4 w-4" />
           Create Client
-        </button>
+        </Button>
       </div>
 
       {/* Create client form */}
       {showCreate && (
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold text-card-foreground">
-            New Client
-          </h3>
-          {createError && (
-            <div className="mb-4 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {createError}
-            </div>
-          )}
-          <form onSubmit={handleCreate} className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <div className="flex-1 space-y-2">
-              <label htmlFor="client-name" className="text-sm font-medium text-foreground">
-                Name
-              </label>
-              <input
-                id="client-name"
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                required
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="Acme Corp"
-              />
-            </div>
-            <div className="flex-1 space-y-2">
-              <label htmlFor="client-slug" className="text-sm font-medium text-foreground">
-                Slug
-              </label>
-              <input
-                id="client-slug"
-                type="text"
-                value={newSlug}
-                onChange={(e) => setNewSlug(e.target.value)}
-                required
-                pattern="^[a-z0-9-]+$"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="acme-corp"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={creating}
-                className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-              >
-                {creating ? 'Creating...' : 'Create'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCreate(false)
-                  setCreateError('')
-                }}
-                className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">New Client</CardTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setShowCreate(false)
+                setCreateError('')
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {createError && (
+              <div className="mb-5 flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {createError}
+              </div>
+            )}
+            <form onSubmit={handleCreate} className="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-2">
+                <label htmlFor="client-name" className="text-sm font-medium text-foreground">
+                  Name
+                </label>
+                <Input
+                  id="client-name"
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  required
+                  placeholder="Acme Corp"
+                />
+              </div>
+              <div className="flex-1 space-y-2">
+                <label htmlFor="client-slug" className="text-sm font-medium text-foreground">
+                  Slug
+                </label>
+                <Input
+                  id="client-slug"
+                  type="text"
+                  value={newSlug}
+                  onChange={(e) => setNewSlug(e.target.value)}
+                  required
+                  pattern="^[a-z0-9-]+$"
+                  placeholder="acme-corp"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={creating}>
+                  {creating ? 'Creating...' : 'Create'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowCreate(false)
+                    setCreateError('')
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
       {/* Clients table */}
-      <div className="overflow-hidden rounded-lg border border-border">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border bg-muted/50">
-              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
-                Name
-              </th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
-                Slug
-              </th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
-                Status
-              </th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
-                Created
-              </th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
+      <Card className="overflow-hidden p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Slug</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {data.clients.length === 0 ? (
-              <tr>
-                <td
+              <TableRow>
+                <TableCell
                   colSpan={5}
-                  className="px-4 py-12 text-center text-sm text-muted-foreground"
+                  className="py-12 text-center text-sm text-muted-foreground"
                 >
                   No clients found. Create one to get started.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               data.clients.map((client) => (
-                <tr
-                  key={client.id}
-                  className="bg-card transition-colors hover:bg-muted/30"
-                >
-                  <td className="px-4 py-3 text-sm font-medium text-foreground">
+                <TableRow key={client.id}>
+                  <TableCell className="font-medium">
                     {client.name}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground font-mono">
+                  </TableCell>
+                  <TableCell className="font-mono text-muted-foreground">
                     {client.slug}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={cn(
-                        'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
-                        STATUS_STYLES[client.status] ?? 'bg-muted text-muted-foreground',
-                      )}
-                    >
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={STATUS_VARIANT[client.status] ?? 'secondary'}>
                       {client.status.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {formatDate(client.createdAt)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Link
                         to="/super-admin/clients/$clientId"
                         params={{ clientId: client.id }}
-                        className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                        search={{ page: 1 }}
                       >
-                        View
+                        <Button variant="outline" size="sm">
+                          View
+                        </Button>
                       </Link>
                       {client.status !== 'SUSPENDED' && (
-                        <button
+                        <Button
+                          variant="destructive"
+                          size="sm"
                           onClick={() => handleSuspend(client.id)}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive/20"
                         >
                           Suspend
-                        </button>
+                        </Button>
                       )}
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </Card>
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -255,23 +257,27 @@ function ClientsPage() {
               to="/super-admin/clients"
               search={{ page: Math.max(1, page - 1) }}
               disabled={page <= 1}
-              className={cn(
-                'inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
-                page <= 1 && 'pointer-events-none opacity-50',
-              )}
             >
-              Previous
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+              >
+                Previous
+              </Button>
             </Link>
             <Link
               to="/super-admin/clients"
               search={{ page: Math.min(totalPages, page + 1) }}
               disabled={page >= totalPages}
-              className={cn(
-                'inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
-                page >= totalPages && 'pointer-events-none opacity-50',
-              )}
             >
-              Next
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+              >
+                Next
+              </Button>
             </Link>
           </div>
         </div>

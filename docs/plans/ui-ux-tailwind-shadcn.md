@@ -268,13 +268,21 @@ export const useTheme = () => useContext(ThemeProviderContext)
 
 ## Component Library
 
-### Initial Shadcn Components
+### Installed Shadcn Components
 
-Install these first:
+The following 19 Shadcn components are installed in `src/components/ui/`:
+
+```
+alert-dialog  avatar    badge      button    card
+dialog        dropdown-menu  form   input     label
+popover       scroll-area   select  separator sheet
+sonner        table         tabs    tooltip
+```
+
+To add more:
 
 ```bash
-bunx shadcn@latest init
-bunx shadcn@latest add button input dialog card table dropdown-menu select form toast alert-dialog sidebar
+bunx shadcn@latest add [component-name]
 ```
 
 ### Component Patterns
@@ -285,28 +293,43 @@ All Shadcn v4 components use:
 - OKLCH colors via CSS variables
 - `tw-animate-css` for animations
 
+### Custom Components
+
+| Component | Path | Purpose |
+|-----------|------|---------|
+| `NotificationBell` | `src/components/common/notification-bell.tsx` | Bell icon with unread count badge, popover with notification list, mark-as-read |
+| `ErrorFallback` | `src/components/common/error-fallback.tsx` | Error display with retry button |
+| `StatusBadge` | `src/components/common/status-badge.tsx` | Color-coded status indicator (uses Shadcn Badge) |
+| `SeverityBadge` | `src/components/common/severity-badge.tsx` | Color-coded severity indicator (uses Shadcn Badge) |
+| `CommentThread` | `src/components/common/comment-thread.tsx` | Threaded comments (uses Shadcn Card, Button) |
+| `ThemeToggle` | `src/components/common/theme-toggle.tsx` | Dark/light mode toggle (uses Shadcn Button) |
+| `RICEScoreCard` | `src/components/ideas/rice-score-card.tsx` | RICE score breakdown (uses Shadcn Card, Input) |
+| `IdeaVoteButton` | `src/components/ideas/idea-vote-button.tsx` | Upvote toggle (uses Shadcn Button) |
+
 ## Layout Structure
 
 ```
-┌──────────────────────────────────────────────┐
-│ Header (UserButton, OrgSwitcher, ThemeToggle)│
-├──────────┬───────────────────────────────────┤
-│          │                                   │
-│ Sidebar  │         Main Content              │
-│          │                                   │
-│ - Dash   │   ┌───────────────────────────┐   │
-│ - Prods  │   │  Module-specific content  │   │
-│ - Ideas  │   │                           │   │
-│ - Road   │   │                           │   │
-│ - Issues │   └───────────────────────────┘   │
-│ - Set    │                                   │
-│          │                                   │
-└──────────┴───────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ Header (UserButton, OrgSwitcher, NotificationBell, Toggle)  │
+├──────────┬──────────────────────────────────────────────────┤
+│          │                                                  │
+│ Sidebar  │         Main Content                             │
+│          │                                                  │
+│ - Dash   │   ┌──────────────────────────────────────────┐   │
+│ - Prods  │   │  Module-specific content                 │   │
+│ - Ideas  │   │  (+ Export dropdown on list pages)       │   │
+│ - Road   │   │                                          │   │
+│ - Issues │   └──────────────────────────────────────────┘   │
+│ - Set    │                                                  │
+│          │                                                  │
+└──────────┴──────────────────────────────────────────────────┘
 ```
 
 - Responsive: sidebar collapses to hamburger menu on mobile
 - Consistent navigation across all client pages
-- Super Admin has a separate layout without the product sidebar
+- Notification bell in header between ThemeToggle and UserButton
+- Export dropdowns on ideas, issues, products list pages
+- Super Admin has a separate layout with Badge and Separator
 
 ## Client Branding (Future)
 

@@ -154,6 +154,7 @@ model Client {
   ideas         Idea[]
   roadmaps      Roadmap[]
   issues        Issue[]
+  notifications Notification[]
 
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -489,9 +490,43 @@ Every query to core business data **must** include a `clientId` WHERE clause. Th
 2. **Prisma middleware/extension** that validates `clientId` is always present on queries
 3. **Unique constraints** that prevent cross-client data collisions (e.g., `@@unique([clientId, name])`)
 
+### Notification Model
+
+```prisma
+enum NotificationType {
+  IDEA_VOTED
+  IDEA_STATUS_CHANGED
+  IDEA_COMMENTED
+  ISSUE_ASSIGNED
+  ISSUE_COMMENTED
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  recipientId String           // Clerk User ID
+  type        NotificationType
+  title       String
+  message     String
+  read        Boolean          @default(false)
+
+  client      Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId    String
+
+  ideaId      String?
+  issueId     String?
+
+  createdAt   DateTime         @default(now())
+
+  @@index([recipientId, clientId])
+  @@index([recipientId, read])
+}
+```
+
+Notifications are created via fire-and-forget helpers in `src/lib/notifications.server.ts`. They are triggered by server functions in `ideas.ts` and `issues.ts` and queried via `src/server/functions/notifications.ts`.
+
 ## Seed Script
 
 See `prisma/seed.ts` for development data. Seed creates:
-- 1 Super Admin
+- 1 Super Admin (email: `superadmin@productplan.com`, password: `admin123`, argon2-hashed)
 - 2 sample Clients with mock Clerk Org IDs
-- Sample Products, Ideas, Roadmap items, and Issues per client
+- Sample Products, Ideas, Roadmap items, Issues, and Notifications per client

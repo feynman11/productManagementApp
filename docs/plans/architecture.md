@@ -87,8 +87,9 @@ productplan/
 │   │   ├── index.tsx              # Landing / redirect
 │   │   ├── _authed.tsx            # Auth guard layout (pathless)
 │   │   ├── _authed/
-│   │   │   ├── _super-admin.tsx   # Super admin layout guard
-│   │   │   ├── _super-admin/
+│   │   │   │   ├── super-admin.tsx     # Super admin layout guard (JWT session check)
+│   │   │   ├── super-admin/
+│   │   │   │   ├── login.tsx
 │   │   │   │   ├── clients.tsx
 │   │   │   │   └── clients.$clientId.tsx
 │   │   │   ├── $orgSlug.tsx       # Client org layout (pathless w/ param)
@@ -106,7 +107,11 @@ productplan/
 │   │   └── common/
 │   ├── lib/
 │   │   ├── prisma.ts              # Prisma client singleton
-│   │   ├── auth.server.ts         # Server-side auth helpers
+│   │   ├── auth.server.ts         # Server-side auth helpers (Clerk + Super Admin JWT)
+│   │   ├── jwt.server.ts          # Super Admin JWT creation/verification (jose)
+│   │   ├── openai.ts              # OpenAI client singleton
+│   │   ├── notifications.server.ts # Notification creation helpers
+│   │   ├── download.ts            # Client-side file download helpers
 │   │   ├── utils.ts               # cn() utility
 │   │   └── permissions.ts         # RBAC helpers
 │   ├── server/
@@ -115,7 +120,12 @@ productplan/
 │   │   │   ├── ideas.ts
 │   │   │   ├── roadmap.ts
 │   │   │   ├── issues.ts
-│   │   │   └── clients.ts        # Super admin
+│   │   │   ├── clients.ts        # Super admin client management
+│   │   │   ├── auth.ts           # Auth functions (Clerk, super admin login/logout)
+│   │   │   ├── notifications.ts  # In-app notification system
+│   │   │   ├── ai.ts             # OpenAI integration (duplicates, sentiment, release notes)
+│   │   │   ├── export.ts         # CSV export (products, ideas, issues)
+│   │   │   └── export-pdf.ts     # PDF export (roadmap)
 │   │   └── webhooks/
 │   │       └── clerk.ts           # Clerk webhook handler
 │   ├── styles/
@@ -125,8 +135,10 @@ productplan/
 │       ├── prisma/                # Prisma client output
 │       └── zod/                   # Auto-generated Zod schemas
 ├── tests/
-│   ├── e2e/
-│   └── playwright.config.ts
+│   ├── e2e/                       # Playwright E2E tests
+│   └── unit/                      # Vitest unit tests
+├── Dockerfile                     # Multi-stage Bun production build
+├── docker-compose.yml             # PostgreSQL 16 + app for local dev
 ├── docs/
 │   └── plans/                     # This documentation
 ├── vite.config.ts
@@ -151,3 +163,15 @@ All Tailwind theming happens in CSS via `@theme inline` directives. No `tailwind
 
 ### 5. SSR with Streaming
 TanStack Start streams HTML to the browser during SSR, enabling faster time-to-first-byte. Route data is dehydrated into the HTML for client rehydration.
+
+### 6. Super Admin JWT Auth (Separate from Clerk)
+Super Admin uses `jose` for JWT token management (HS256, 8h expiry). The token is stored in an httpOnly, Secure, SameSite=Strict cookie named `sa_token`. The `requireSuperAdmin()` helper in `src/lib/auth.server.ts` reads the cookie via `getRequest()` from `@tanstack/react-start/server` and verifies the JWT.
+
+### 7. In-App Notifications
+Database-backed notifications (Prisma `Notification` model) triggered by key events: idea votes, idea status changes, idea/issue comments, issue assignments. Notification triggers are fire-and-forget (`.catch(() => {})`) to avoid blocking the primary operation.
+
+### 8. AI Integration
+OpenAI `gpt-4o-mini` model used for duplicate idea detection, sentiment analysis, and release notes generation. The OpenAI client is a singleton in `src/lib/openai.ts` (same pattern as `prisma.ts`).
+
+### 9. Export
+CSV export for products, ideas, and issues via server functions returning string content. PDF export for roadmaps via `@react-pdf/renderer` using `React.createElement` for server-side rendering, returning base64-encoded data.

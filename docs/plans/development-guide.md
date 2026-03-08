@@ -46,9 +46,11 @@ CLERK_SECRET_KEY="sk_test_..."
 VITE_CLERK_PUBLISHABLE_KEY="pk_test_..."
 CLERK_WEBHOOK_SIGNING_SECRET="whsec_..."
 
-# Super Admin (development only)
-SUPER_ADMIN_EMAIL="superadmin@productplan.com"
-SUPER_ADMIN_PASSWORD="change-me-in-production"
+# Super Admin JWT auth
+SUPER_ADMIN_JWT_SECRET="dev-secret-change-in-production"
+
+# OpenAI (optional — enables AI features)
+OPENAI_API_KEY="sk-..."
 ```
 
 ### 4. Database Setup
@@ -74,9 +76,20 @@ This starts the TanStack Start dev server on `http://localhost:3000` with HMR.
 
 ### 6. Shadcn UI Setup
 
+Shadcn components are already installed in `src/components/ui/`. To add more:
+
 ```bash
-bunx shadcn@latest init
-bunx shadcn@latest add button input dialog card table dropdown-menu select form toast alert-dialog sidebar
+bunx shadcn@latest add [component-name]
+```
+
+Installed components: alert-dialog, avatar, badge, button, card, dialog, dropdown-menu, form, input, label, popover, scroll-area, select, separator, sheet, sonner, table, tabs, tooltip.
+
+### 7. Docker Alternative
+
+Instead of steps 3-5, you can use Docker Compose:
+
+```bash
+docker compose up -d    # Starts PostgreSQL + app
 ```
 
 ## Project Scripts
@@ -162,6 +175,10 @@ export const createProduct = createServerFn({ method: 'POST' })
     })
   })
 ```
+
+Server function files: `products.ts`, `ideas.ts`, `roadmap.ts`, `issues.ts`, `clients.ts`, `auth.ts`, `notifications.ts`, `ai.ts`, `export.ts`, `export-pdf.ts`.
+
+**Important:** Use `.inputValidator()` (not `.validator()`) for input validation in TanStack Start server functions. Call server functions with `{ data: { ... } }` wrapping from clients.
 
 ### Routes
 

@@ -33,10 +33,10 @@ enum ClientStatus {
   SUSPENDED
 }
 
-enum ClientUserRole {
-  CLIENT_ADMIN
-  CLIENT_USER
-  CLIENT_VIEWER
+enum OrgRole {
+  ADMIN
+  CONTRIBUTOR
+  VIEWER
 }
 
 enum ProductStatus {
@@ -90,28 +90,46 @@ enum IssueStatus {
   WONT_FIX
 }
 
+enum NotificationType {
+  IDEA_VOTED
+  IDEA_STATUS_CHANGED
+  IDEA_COMMENTED
+  ISSUE_ASSIGNED
+  ISSUE_COMMENTED
+}
+
 // ──────────────────────────────────────────────────────
-// Multi-Tenancy Models
+// User & Multi-Tenancy Models
 // ──────────────────────────────────────────────────────
 
-model SuperAdmin {
-  id           String   @id @default(cuid())
+model AppUser {
+  id           String  @id @default(cuid())
+  clerkUserId  String  @unique
   /// @zod.string.email()
-  email        String   @unique
-  passwordHash String
+  email        String?
   name         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isSuperAdmin Boolean @default(false)
+
+  activeClient   Client? @relation("activeClient", fields: [activeClientId], references: [id])
+  activeClientId String?
+
+  memberships        ClientUser[]
+  productMemberships ProductMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([activeClientId])
 }
 
 model Client {
-  id         String       @id @default(cuid())
+  id     String       @id @default(cuid())
   /// @zod.string.min(1).max(100)
-  name       String       @unique
+  name   String       @unique
   /// @zod.string.min(1).max(50).regex(/^[a-z0-9-]+$/)
-  slug       String       @unique
-  clerkOrgId String?      @unique
-  status     ClientStatus @default(PENDING_SETUP)
+  slug   String       @unique
+  status ClientStatus @default(PENDING_SETUP)
+  isDemo Boolean      @default(false)
 
   clientUsers    ClientUser[]
   products       Product[]
@@ -119,26 +137,28 @@ model Client {
   ideas          Idea[]
   roadmaps       Roadmap[]
   issues         Issue[]
+  notifications  Notification[]
+  activeUsers    AppUser[]      @relation("activeClient")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
-  @@index([clerkOrgId])
 }
 
 model ClientUser {
-  id          String         @id @default(cuid())
-  clerkUserId String
-  client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  clientId    String
-  role        ClientUserRole
+  id     String  @id @default(cuid())
+  role   OrgRole
+  user   AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  client Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([clerkUserId, clientId])
-  @@index([clerkUserId])
+  @@unique([userId, clientId])
+  @@index([userId])
   @@index([clientId])
 }
 
@@ -177,20 +197,21 @@ model Product {
 }
 
 model ProductMember {
-  id          String            @id @default(cuid())
-  product     Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId   String
-  clerkUserId String
-  role        ProductMemberRole
+  id        String            @id @default(cuid())
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  user      AppUser           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  role      ProductMemberRole
 
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   clientId String
 
   createdAt DateTime @default(now())
 
-  @@unique([productId, clerkUserId])
+  @@unique([productId, userId])
   @@index([productId])
-  @@index([clerkUserId])
+  @@index([userId])
   @@index([clientId])
 }
 
@@ -210,7 +231,7 @@ model Idea {
 
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId String
-  authorId  String // Clerk User ID
+  authorId  String // AppUser.id
 
   // RICE scoring
   riceReach      Int?
@@ -321,8 +342,8 @@ model Issue {
 
   product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId  String
-  reporterId String  // Clerk User ID
-  assigneeId String? // Clerk User ID
+  reporterId String // AppUser.id
+  assigneeId String? // AppUser.id
 
   customersAffected Int @default(0)
 
@@ -361,7 +382,7 @@ model Goal {
 model Comment {
   id       String @id @default(cuid())
   content  String
-  authorId String // Clerk User ID
+  authorId String // AppUser.id
 
   idea   Idea?   @relation(fields: [ideaId], references: [id], onDelete: Cascade)
   ideaId String?
@@ -395,4 +416,30 @@ model CustomField {
   productId String
 
   @@index([productId])
+}
+
+// ──────────────────────────────────────────────────────
+// Notifications
+// ──────────────────────────────────────────────────────
+
+model Notification {
+  id      String           @id @default(cuid())
+  type    NotificationType
+  title   String
+  message String
+  read    Boolean          @default(false)
+
+  recipientId String // AppUser.id
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  // Optional links to related entities
+  ideaId  String?
+  issueId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([recipientId, read])
+  @@index([clientId])
 }

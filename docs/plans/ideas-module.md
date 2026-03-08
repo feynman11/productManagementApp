@@ -22,10 +22,17 @@ The Ideas module enables collecting, evaluating, and prioritizing product ideas 
 - Auto-calculated RICE score: `(Reach * Impact * Confidence) / Effort`
 - Sortable by RICE score for prioritization
 
-### AI Features (Phase 8)
-- Duplicate detection across client's ideas
-- Idea clustering by similarity
-- Sentiment analysis on idea descriptions
+### AI Features (Implemented)
+- **Duplicate detection**: When creating an idea, GPT-4o-mini scans existing ideas for semantic similarity (`detectDuplicateIdeas` in `src/server/functions/ai.ts`)
+- **Sentiment analysis**: Admin-only analysis of an idea and its comments, returning sentiment, summary, and numeric score (`analyzeIdeaSentiment`)
+
+### Notifications (Implemented)
+- **IDEA_VOTED**: Idea author notified when someone votes on their idea
+- **IDEA_STATUS_CHANGED**: Idea author notified when admin changes the status
+- **IDEA_COMMENTED**: Idea author notified when someone comments
+
+### Export (Implemented)
+- **CSV export**: Download all ideas for a product as CSV with RICE scores, tags, votes, and status (`exportIdeasCsv` in `src/server/functions/export.ts`)
 
 ### Idea Promotion
 - Promote an idea to a Roadmap Item within the same product
@@ -75,10 +82,17 @@ src/server/functions/ideas.ts
   ├── getIdea(clientId, ideaId)               → Idea with comments
   ├── createIdea(data)                        → Idea
   ├── updateIdea(id, data)                    → Idea
-  ├── updateIdeaStatus(id, status)            → Idea
-  ├── voteIdea(ideaId)                        → Idea
-  ├── addComment(ideaId, content)             → Comment
+  ├── updateIdeaStatus(id, status)            → Idea       (+ IDEA_STATUS_CHANGED notification)
+  ├── voteIdea(ideaId)                        → Idea       (+ IDEA_VOTED notification)
+  ├── addComment(ideaId, content)             → Comment    (+ IDEA_COMMENTED notification)
   └── promoteToRoadmap(ideaId, roadmapId)     → RoadmapItem
+
+src/server/functions/ai.ts
+  ├── detectDuplicateIdeas(productId, title, description)  → { duplicates[] }
+  └── analyzeIdeaSentiment(ideaId)                         → { sentiment, summary, score }
+
+src/server/functions/export.ts
+  └── exportIdeasCsv(productId)               → { csv, filename }
 ```
 
 ## Routes
