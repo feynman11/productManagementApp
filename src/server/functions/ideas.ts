@@ -71,6 +71,7 @@ export const getIdeas = createServerFn({ method: 'GET' })
       include: {
         _count: { select: { comments: true } },
         tags: true,
+        author: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
       orderBy,
     })
@@ -83,7 +84,11 @@ export const getIdea = createServerFn({ method: 'GET' })
     const idea = await prisma.idea.findFirst({
       where: { id: data.ideaId, clientId },
       include: {
+        author: { select: { id: true, name: true, email: true, avatarUrl: true } },
         comments: {
+          include: {
+            author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          },
           orderBy: { createdAt: 'asc' },
         },
         tags: true,
@@ -273,6 +278,9 @@ export const addIdeaComment = createServerFn({ method: 'POST' })
         content: data.content,
         authorId: userId,
         ideaId: data.ideaId,
+      },
+      include: {
+        author: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
     })
 

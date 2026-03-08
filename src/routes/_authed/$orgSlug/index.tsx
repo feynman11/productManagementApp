@@ -13,6 +13,7 @@ import {
 import { requireClientAuth } from '~/lib/auth.server'
 import { prisma } from '~/lib/prisma'
 import { cn } from '~/lib/utils'
+import { getProductIcon } from '~/lib/product-icons'
 import { createIdea } from '~/server/functions/ideas'
 import { addFeatureToProduct } from '~/server/functions/roadmap'
 import { createIssue } from '~/server/functions/issues'
@@ -569,7 +570,14 @@ function ProductCard({
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white font-heading font-bold text-sm"
             style={{ backgroundColor: product.color }}
           >
-            {product.icon || product.name.charAt(0).toUpperCase()}
+            {(() => {
+              const IconComponent = getProductIcon(product.icon)
+              return IconComponent ? (
+                <IconComponent className="h-5 w-5" />
+              ) : (
+                product.name.charAt(0).toUpperCase()
+              )
+            })()}
           </div>
           <div className="min-w-0 flex-1">
             <Link

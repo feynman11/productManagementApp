@@ -356,9 +356,9 @@ function IssuesPage() {
                         {issue.title}
                       </h4>
                       <div className="mt-1 flex items-center gap-2">
-                        {issue.assigneeId && (
-                          <span className="inline-flex items-center rounded-md bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
-                            Assigned
+                        {issue.assignee && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
+                            {issue.assignee.name || issue.assignee.email || 'Assigned'}
                           </span>
                         )}
                         {issue._count.comments > 0 && (

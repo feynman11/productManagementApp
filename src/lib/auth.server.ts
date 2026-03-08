@@ -1,4 +1,4 @@
-import { auth } from '@clerk/tanstack-react-start/server'
+import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
 import { getCookie, setCookie } from '@tanstack/start-server-core'
 import { prisma } from './prisma'
 import type { OrgRole } from '../generated/prisma/client/enums'
@@ -30,20 +30,7 @@ export async function optionalAuth() {
  */
 export async function requireAppUser() {
   const { userId: clerkUserId } = await requireAuth()
-
-  let appUser = await prisma.appUser.findUnique({
-    where: { clerkUserId },
-  })
-
-  if (!appUser) {
-    // First user ever becomes super admin
-    const isFirst = (await prisma.appUser.count()) === 0
-    appUser = await prisma.appUser.create({
-      data: { clerkUserId, isSuperAdmin: isFirst },
-    })
-  }
-
-  return appUser
+  return getOrCreateAppUser(clerkUserId)
 }
 
 /**
@@ -149,7 +136,26 @@ export async function requireClientAuth(opts?: { slug?: string }) {
 }
 
 /**
+ * Fetch name and email from Clerk for a given user ID.
+ */
+async function fetchClerkProfile(clerkUserId: string) {
+  try {
+    const clerk = clerkClient()
+    const user = await clerk.users.getUser(clerkUserId)
+    const email = user.emailAddresses.find(
+      (e) => e.id === user.primaryEmailAddressId,
+    )?.emailAddress ?? user.emailAddresses[0]?.emailAddress ?? null
+    const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || null
+    const avatarUrl = user.imageUrl || null
+    return { name, email, avatarUrl }
+  } catch {
+    return { name: null, email: null, avatarUrl: null }
+  }
+}
+
+/**
  * Helper to get or create an AppUser for a Clerk user ID.
+ * Syncs name/email from Clerk on creation and when missing.
  */
 async function getOrCreateAppUser(clerkUserId: string) {
   let appUser = await prisma.appUser.findUnique({
@@ -158,9 +164,22 @@ async function getOrCreateAppUser(clerkUserId: string) {
 
   if (!appUser) {
     const isFirst = (await prisma.appUser.count()) === 0
+    const { name, email, avatarUrl } = await fetchClerkProfile(clerkUserId)
     appUser = await prisma.appUser.create({
-      data: { clerkUserId, isSuperAdmin: isFirst },
+      data: { clerkUserId, isSuperAdmin: isFirst, name, email, avatarUrl },
     })
+  } else if (!appUser.name || !appUser.email || !appUser.avatarUrl) {
+    const { name, email, avatarUrl } = await fetchClerkProfile(clerkUserId)
+    if (name || email || avatarUrl) {
+      appUser = await prisma.appUser.update({
+        where: { id: appUser.id },
+        data: {
+          ...(name && !appUser.name ? { name } : {}),
+          ...(email && !appUser.email ? { email } : {}),
+          ...(avatarUrl && !appUser.avatarUrl ? { avatarUrl } : {}),
+        },
+      })
+    }
   }
 
   return appUser

@@ -9,7 +9,7 @@ import { switchOrg, getUserOrgs } from '~/server/functions/clients'
 const getClientBySlug = createServerFn({ method: 'GET' })
   .inputValidator(z.object({ slug: z.string() }))
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo, isGuest } = await requireClientAuth({ slug: data.slug })
+    const { clientId, role, isDemo, isGuest, appUser } = await requireClientAuth({ slug: data.slug })
 
     const client = await prisma.client.findUnique({
       where: { id: clientId },
@@ -18,7 +18,7 @@ const getClientBySlug = createServerFn({ method: 'GET' })
 
     if (!client) throw new Error('Client not found')
 
-    return { client, clientId, role, isDemo, isGuest }
+    return { client, clientId, role, isDemo, isGuest, isSuperAdmin: appUser?.isSuperAdmin ?? false }
   })
 
 export const Route = createFileRoute('/_authed/$orgSlug')({
@@ -32,11 +32,13 @@ export const Route = createFileRoute('/_authed/$orgSlug')({
       }
 
       let userOrgs: Awaited<ReturnType<typeof getUserOrgs>> = []
+      let isSuperAdmin = false
 
       if (!data.isGuest) {
         // Set this org as the user's active org (authenticated users only)
         await switchOrg({ data: { slug: params.orgSlug } })
         userOrgs = await getUserOrgs()
+        isSuperAdmin = data.isSuperAdmin
       }
 
       return {
@@ -44,6 +46,7 @@ export const Route = createFileRoute('/_authed/$orgSlug')({
         clientId: data.clientId,
         isDemo: data.isDemo,
         isGuest: data.isGuest,
+        isSuperAdmin,
         userOrgs,
       }
     } catch (error) {
@@ -68,10 +71,10 @@ export const Route = createFileRoute('/_authed/$orgSlug')({
 
 function OrgLayout() {
   const { orgSlug } = Route.useParams()
-  const { isDemo, isGuest, userOrgs } = Route.useRouteContext()
+  const { isDemo, isGuest, isSuperAdmin, userOrgs } = Route.useRouteContext()
 
   return (
-    <AppLayout orgSlug={orgSlug} isDemo={isDemo} isGuest={isGuest} userOrgs={userOrgs}>
+    <AppLayout orgSlug={orgSlug} isDemo={isDemo} isGuest={isGuest} isSuperAdmin={isSuperAdmin} userOrgs={userOrgs}>
       <Outlet />
     </AppLayout>
   )

@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import {
   ArrowLeft,
-  User,
   Calendar,
   Tag,
   ArrowRightCircle,
@@ -24,6 +23,7 @@ import { canWrite, canAdmin } from '~/lib/permissions'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
+import { Avatar, AvatarImage, AvatarFallback } from '~/components/ui/avatar'
 import {
   Select,
   SelectTrigger,
@@ -162,10 +162,13 @@ function IdeaDetailPage() {
             {/* Meta info */}
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
-                  <User className="h-3 w-3 text-primary" />
-                </div>
-                {idea.authorId.slice(0, 12)}...
+                <Avatar size="sm">
+                  {idea.author?.avatarUrl && <AvatarImage src={idea.author.avatarUrl} alt={idea.author?.name || ''} />}
+                  <AvatarFallback className="text-[10px]">
+                    {(idea.author?.name || idea.author?.email || '??').slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                {idea.author?.name || idea.author?.email || 'Unknown'}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5" />
@@ -230,12 +233,7 @@ function IdeaDetailPage() {
           <Card>
             <CardContent>
               <CommentThread
-                comments={idea.comments.map((c: any) => ({
-                  id: c.id,
-                  content: c.content,
-                  authorId: c.authorId,
-                  createdAt: c.createdAt,
-                }))}
+                comments={idea.comments}
                 onAddComment={handleAddComment}
                 canComment={userCanWrite}
               />

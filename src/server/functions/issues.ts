@@ -37,6 +37,8 @@ export const getIssues = createServerFn({ method: 'GET' })
       },
       include: {
         _count: { select: { comments: true } },
+        reporter: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        assignee: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -49,7 +51,12 @@ export const getIssue = createServerFn({ method: 'GET' })
     const issue = await prisma.issue.findFirst({
       where: { id: data.issueId, clientId },
       include: {
+        reporter: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        assignee: { select: { id: true, name: true, email: true, avatarUrl: true } },
         comments: {
+          include: {
+            author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          },
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -182,6 +189,9 @@ export const addIssueComment = createServerFn({ method: 'POST' })
         content: data.content,
         authorId: userId,
         issueId: data.issueId,
+      },
+      include: {
+        author: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
     })
 

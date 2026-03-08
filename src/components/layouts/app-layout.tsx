@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { UserButton, SignInButton } from '@clerk/tanstack-react-start'
-import { Menu, Eye, LogIn } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { Menu, Eye, LogIn, ShieldCheck } from 'lucide-react'
 import { AppSidebar } from '~/components/layouts/app-sidebar'
 import { OrgSwitcher } from '~/components/common/org-switcher'
 import { ThemeToggle } from '~/components/common/theme-toggle'
@@ -21,11 +22,12 @@ interface AppLayoutProps {
   orgSlug: string
   isDemo?: boolean
   isGuest?: boolean
+  isSuperAdmin?: boolean
   userOrgs: OrgInfo[]
   children: React.ReactNode
 }
 
-export function AppLayout({ orgSlug, isDemo, isGuest, userOrgs, children }: AppLayoutProps) {
+export function AppLayout({ orgSlug, isDemo, isGuest, isSuperAdmin, userOrgs, children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
@@ -76,6 +78,13 @@ export function AppLayout({ orgSlug, isDemo, isGuest, userOrgs, children }: AppL
             ) : (
               <>
                 <NotificationBell />
+                {isSuperAdmin && (
+                  <Link to="/super-admin/clients" search={{ page: 1 }}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Super Admin">
+                      <ShieldCheck className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                )}
                 <ThemeToggle />
                 <Separator orientation="vertical" className="h-6 mx-1" />
                 <UserButton

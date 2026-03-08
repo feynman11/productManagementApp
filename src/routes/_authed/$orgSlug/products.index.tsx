@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Download,
 } from 'lucide-react'
+import { getProductIcon } from '~/lib/product-icons'
 import { getProducts } from '~/server/functions/products'
 import { exportProductsCsv } from '~/server/functions/export'
 import { downloadFile } from '~/lib/download'
@@ -178,7 +179,10 @@ function ProductsPage() {
                         className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
                         style={{ backgroundColor: `${product.color}15` }}
                       >
-                        <Package className="h-4 w-4" style={{ color: product.color }} />
+                        {(() => {
+                          const Icon = getProductIcon(product.icon) ?? Package
+                          return <Icon className="h-4 w-4" style={{ color: product.color }} />
+                        })()}
                       </div>
                       <div>
                         <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors font-heading">

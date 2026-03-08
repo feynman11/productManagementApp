@@ -1,12 +1,13 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { ArrowLeft, Palette, Package } from 'lucide-react'
+import { ArrowLeft, Palette } from 'lucide-react'
 import { createProduct } from '~/server/functions/products'
+import { getProductIcon } from '~/lib/product-icons'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Card, CardContent, CardFooter } from '~/components/ui/card'
-import { Separator } from '~/components/ui/separator'
+import { IconPicker } from '~/components/common/icon-picker'
 
 export const Route = createFileRoute('/_authed/$orgSlug/products/new')({
   component: NewProductPage,
@@ -31,7 +32,7 @@ function NewProductPage() {
   const [description, setDescription] = useState('')
   const [vision, setVision] = useState('')
   const [color, setColor] = useState('#6366F1')
-  const [icon, setIcon] = useState('')
+  const [icon, setIcon] = useState('package')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -61,6 +62,8 @@ function NewProductPage() {
       setSubmitting(false)
     }
   }
+
+  const PreviewIcon = getProductIcon(icon)
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -100,7 +103,13 @@ function NewProductPage() {
                 className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0"
                 style={{ backgroundColor: `${color}20` }}
               >
-                <Package className="h-5 w-5" style={{ color }} />
+                {PreviewIcon ? (
+                  <PreviewIcon className="h-5 w-5" style={{ color }} />
+                ) : (
+                  <span className="text-sm font-bold" style={{ color }}>
+                    {name ? name.charAt(0).toUpperCase() : 'P'}
+                  </span>
+                )}
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground font-heading">
@@ -200,19 +209,8 @@ function NewProductPage() {
 
             {/* Icon */}
             <div className="space-y-2">
-              <label htmlFor="product-icon" className="text-sm font-medium text-foreground">
-                Icon
-              </label>
-              <Input
-                id="product-icon"
-                type="text"
-                value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                placeholder="e.g., package, rocket, globe"
-              />
-              <p className="text-xs text-muted-foreground">
-                Optional icon name for identification
-              </p>
+              <label className="text-sm font-medium text-foreground">Icon</label>
+              <IconPicker value={icon} onChange={setIcon} color={color} />
             </div>
           </CardContent>
 

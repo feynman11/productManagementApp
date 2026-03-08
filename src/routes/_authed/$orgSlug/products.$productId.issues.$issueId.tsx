@@ -15,6 +15,7 @@ import { CommentThread } from '~/components/common/comment-thread'
 import { canWrite, canAdmin } from '~/lib/permissions'
 import { Button } from '~/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
+import { Avatar, AvatarImage, AvatarFallback } from '~/components/ui/avatar'
 import {
   Select,
   SelectTrigger,
@@ -139,17 +140,27 @@ function IssueDetailPage() {
             {/* Meta info */}
             <div className="mt-2.5 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5" />
-                Reported by {issue.reporterId.slice(0, 12)}...
+                <Avatar size="sm">
+                  {issue.reporter?.avatarUrl && <AvatarImage src={issue.reporter.avatarUrl} alt={issue.reporter?.name || ''} />}
+                  <AvatarFallback className="text-[10px]">
+                    {(issue.reporter?.name || issue.reporter?.email || '??').slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                Reported by {issue.reporter?.name || issue.reporter?.email || 'Unknown'}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5" />
                 {formatDate(issue.createdAt)}
               </span>
-              {issue.assigneeId && (
+              {issue.assignee && (
                 <span className="inline-flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5" />
-                  Assigned to {issue.assigneeId.slice(0, 12)}...
+                  <Avatar size="sm">
+                    {issue.assignee.avatarUrl && <AvatarImage src={issue.assignee.avatarUrl} alt={issue.assignee.name || ''} />}
+                    <AvatarFallback className="text-[10px]">
+                      {(issue.assignee.name || issue.assignee.email || '??').slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  Assigned to {issue.assignee.name || issue.assignee.email || 'Unknown'}
                 </span>
               )}
             </div>
@@ -179,12 +190,7 @@ function IssueDetailPage() {
           <Card>
             <CardContent>
               <CommentThread
-                comments={issue.comments.map((c: any) => ({
-                  id: c.id,
-                  content: c.content,
-                  authorId: c.authorId,
-                  createdAt: c.createdAt,
-                }))}
+                comments={issue.comments}
                 onAddComment={handleAddComment}
                 canComment={userCanWrite}
               />
@@ -269,13 +275,16 @@ function IssueDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {issue.assigneeId ? (
+              {issue.assignee ? (
                 <div className="flex items-center gap-2.5 rounded-lg bg-muted/40 px-3.5 py-2.5">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium">
-                    {issue.assigneeId.slice(0, 2).toUpperCase()}
-                  </div>
-                  <span className="text-sm text-foreground font-mono text-xs">
-                    {issue.assigneeId.slice(0, 12)}...
+                  <Avatar size="sm">
+                    {issue.assignee.avatarUrl && <AvatarImage src={issue.assignee.avatarUrl} alt={issue.assignee.name || ''} />}
+                    <AvatarFallback className="text-[10px]">
+                      {(issue.assignee.name || issue.assignee.email || '??').slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm text-foreground">
+                    {issue.assignee.name || issue.assignee.email || 'Unknown'}
                   </span>
                 </div>
               ) : (

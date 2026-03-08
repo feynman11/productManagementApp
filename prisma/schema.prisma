@@ -108,6 +108,7 @@ model AppUser {
   /// @zod.string.email()
   email        String?
   name         String?
+  avatarUrl    String?
   isSuperAdmin Boolean @default(false)
 
   activeClient   Client? @relation("activeClient", fields: [activeClientId], references: [id])
@@ -115,6 +116,12 @@ model AppUser {
 
   memberships        ClientUser[]
   productMemberships ProductMember[]
+
+  // Reverse relations for authored/reported/assigned entities
+  authoredIdeas    Idea[]    @relation("IdeaAuthor")
+  reportedIssues   Issue[]   @relation("IssueReporter")
+  assignedIssues   Issue[]   @relation("IssueAssignee")
+  authoredComments Comment[] @relation("CommentAuthor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -231,7 +238,8 @@ model Idea {
 
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId String
-  authorId  String // AppUser.id
+  author    AppUser @relation("IdeaAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
 
   // RICE scoring
   riceReach      Int?
@@ -340,10 +348,12 @@ model Issue {
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   clientId String
 
-  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId  String
-  reporterId String // AppUser.id
-  assigneeId String? // AppUser.id
+  reporter   AppUser  @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reporterId String
+  assignee   AppUser? @relation("IssueAssignee", fields: [assigneeId], references: [id])
+  assigneeId String?
 
   customersAffected Int @default(0)
 
@@ -380,9 +390,10 @@ model Goal {
 }
 
 model Comment {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   content  String
-  authorId String // AppUser.id
+  author   AppUser @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String
 
   idea   Idea?   @relation(fields: [ideaId], references: [id], onDelete: Cascade)
   ideaId String?

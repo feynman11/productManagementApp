@@ -97,7 +97,7 @@ export const getClient = createServerFn({ method: 'GET' })
       where: { id: data.clientId },
       include: {
         clientUsers: {
-          include: { user: { select: { id: true, email: true, name: true, clerkUserId: true } } },
+          include: { user: { select: { id: true, email: true, name: true, clerkUserId: true, avatarUrl: true } } },
         },
       },
     })
@@ -161,28 +161,58 @@ export const activateClient = createServerFn({ method: 'POST' })
 // Super Admin — User Management within Orgs
 // ──────────────────────────────────────────────────────
 
+export const searchUsersNotInClient = createServerFn({ method: 'GET' })
+  .inputValidator(z.object({
+    clientId: z.string(),
+    query: z.string().default(''),
+  }))
+  .handler(async ({ data }) => {
+    await requireSuperAdmin()
+
+    const existingUserIds = (
+      await prisma.clientUser.findMany({
+        where: { clientId: data.clientId },
+        select: { userId: true },
+      })
+    ).map((cu) => cu.userId)
+
+    return prisma.appUser.findMany({
+      where: {
+        id: { notIn: existingUserIds.length > 0 ? existingUserIds : undefined },
+        ...(data.query
+          ? {
+              OR: [
+                { name: { contains: data.query, mode: 'insensitive' } },
+                { email: { contains: data.query, mode: 'insensitive' } },
+                { clerkUserId: { contains: data.query, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      select: { id: true, name: true, email: true, clerkUserId: true, avatarUrl: true },
+      take: 20,
+      orderBy: { name: 'asc' },
+    })
+  })
+
 export const addUserToOrg = createServerFn({ method: 'POST' })
   .inputValidator(z.object({
     clientId: z.string(),
-    clerkUserId: z.string().min(1),
+    userId: z.string().min(1),
     role: z.enum(['ADMIN', 'CONTRIBUTOR', 'VIEWER']).default('VIEWER'),
   }))
   .handler(async ({ data }) => {
     await requireSuperAdmin()
 
-    // Find or create AppUser by clerkUserId
-    let appUser = await prisma.appUser.findUnique({
-      where: { clerkUserId: data.clerkUserId },
+    // Verify user exists
+    const appUser = await prisma.appUser.findUnique({
+      where: { id: data.userId },
     })
-    if (!appUser) {
-      appUser = await prisma.appUser.create({
-        data: { clerkUserId: data.clerkUserId },
-      })
-    }
+    if (!appUser) throw new Error('User not found')
 
     return prisma.clientUser.create({
       data: {
-        userId: appUser.id,
+        userId: data.userId,
         clientId: data.clientId,
         role: data.role,
       },

@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import {
   Plus,
   X,
@@ -52,7 +52,9 @@ const MONTHS_VISIBLE = 8
 const ROW_H = 44
 const BAR_H = 28
 const BAR_Y = 8
-const LABEL_W = 180
+const DEFAULT_LABEL_W = 280
+const MIN_LABEL_W = 180
+const MAX_LABEL_W = 500
 
 const STATUS_BAR: Record<string, string> = {
   BACKLOG: 'bg-blue-400/70 dark:bg-blue-500/50',
@@ -638,6 +640,33 @@ function RoadmapPage() {
   const [viewStart, setViewStart] = useState(() => addM(mStart(now), -1))
   const [showAddFeature, setShowAddFeature] = useState(false)
   const [showAddRelease, setShowAddRelease] = useState(false)
+  const [labelW, setLabelW] = useState(DEFAULT_LABEL_W)
+  const resizingRef = useRef(false)
+
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      resizingRef.current = true
+      const startX = e.clientX
+      const startW = labelW
+
+      function onMouseMove(ev: MouseEvent) {
+        if (!resizingRef.current) return
+        const newW = Math.min(MAX_LABEL_W, Math.max(MIN_LABEL_W, startW + ev.clientX - startX))
+        setLabelW(newW)
+      }
+
+      function onMouseUp() {
+        resizingRef.current = false
+        document.removeEventListener('mousemove', onMouseMove)
+        document.removeEventListener('mouseup', onMouseUp)
+      }
+
+      document.addEventListener('mousemove', onMouseMove)
+      document.addEventListener('mouseup', onMouseUp)
+    },
+    [labelW],
+  )
 
   const items = roadmap.items ?? []
   const releases = roadmap.releases ?? []
@@ -788,15 +817,19 @@ function RoadmapPage() {
         {/* Timeline grid */}
         <div className="overflow-x-auto">
           <div
-            style={{ minWidth: LABEL_W + MONTHS_VISIBLE * MONTH_W }}
+            style={{ minWidth: labelW + MONTHS_VISIBLE * MONTH_W }}
           >
             {/* Month header row */}
             <div className="flex border-b border-border/40">
               <div
-                className="shrink-0 border-r border-border/40 px-3 py-2.5"
-                style={{ width: LABEL_W }}
+                className="relative shrink-0 border-r border-border/40 px-3 py-2.5"
+                style={{ width: labelW }}
               >
                 <span className="section-title">Feature</span>
+                <div
+                  className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
+                  onMouseDown={handleResizeStart}
+                />
               </div>
               {months.map((m) => (
                 <div
@@ -820,7 +853,7 @@ function RoadmapPage() {
                 {/* Background grid + current-month highlight */}
                 <div
                   className="pointer-events-none absolute inset-0"
-                  style={{ left: LABEL_W }}
+                  style={{ left: labelW }}
                 >
                   {months.map((m, i) => (
                     <div
@@ -840,7 +873,7 @@ function RoadmapPage() {
                 {showToday && (
                   <div
                     className="pointer-events-none absolute top-0 bottom-0 z-20"
-                    style={{ left: LABEL_W + todayPos * MONTH_W }}
+                    style={{ left: labelW + todayPos * MONTH_W }}
                   >
                     <div className="h-full w-0.5 bg-primary/50" />
                     <div className="absolute top-0 -translate-x-1/2 rounded-b-md bg-primary px-1.5 py-px text-[8px] font-bold text-primary-foreground tracking-wide uppercase">
@@ -859,7 +892,7 @@ function RoadmapPage() {
                       <div
                         key={`rm-${r.id}`}
                         className="pointer-events-none absolute top-0 bottom-0 z-10"
-                        style={{ left: LABEL_W + pos * MONTH_W }}
+                        style={{ left: labelW + pos * MONTH_W }}
                       >
                         <div className="h-full border-l-2 border-dashed border-indigo-400/30 dark:border-indigo-300/20" />
                         <div className="absolute top-1 -translate-x-1/2 flex flex-col items-center gap-0.5">
@@ -900,7 +933,7 @@ function RoadmapPage() {
                       {/* Label column */}
                       <div
                         className="relative z-20 shrink-0 flex items-center gap-2 border-r border-border/40 bg-card px-3"
-                        style={{ width: LABEL_W }}
+                        style={{ width: labelW }}
                       >
                         {item.priority > 0 && (
                           <div

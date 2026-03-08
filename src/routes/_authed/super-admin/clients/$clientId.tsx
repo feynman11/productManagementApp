@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
-import { ArrowLeft, AlertCircle, Plus, Trash2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowLeft, AlertCircle, Plus, Trash2, Check, ChevronsUpDown } from 'lucide-react'
 import {
   getClient,
   updateClient,
@@ -9,12 +9,27 @@ import {
   addUserToOrg,
   removeUserFromOrg,
   updateUserOrgRole,
+  searchUsersNotInClient,
 } from '~/server/functions/clients'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
 import { Separator } from '~/components/ui/separator'
+import { Avatar, AvatarImage, AvatarFallback } from '~/components/ui/avatar'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '~/components/ui/command'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -22,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
+import { cn } from '~/lib/utils'
 
 export const Route = createFileRoute('/_authed/super-admin/clients/$clientId')(
   {
@@ -56,10 +72,16 @@ function ClientDetailPage() {
 
   // Add user form
   const [showAddUser, setShowAddUser] = useState(false)
-  const [newClerkUserId, setNewClerkUserId] = useState('')
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [selectedUserLabel, setSelectedUserLabel] = useState('')
+  const [userSearchOpen, setUserSearchOpen] = useState(false)
+  const [userSearchQuery, setUserSearchQuery] = useState('')
+  const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; name: string | null; email: string | null; clerkUserId: string; avatarUrl: string | null }>>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
   const [newUserRole, setNewUserRole] = useState<'ADMIN' | 'CONTRIBUTOR' | 'VIEWER'>('VIEWER')
   const [addingUser, setAddingUser] = useState(false)
   const [addUserError, setAddUserError] = useState('')
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function reload() {
     navigate({
@@ -67,6 +89,33 @@ function ClientDetailPage() {
       params: { clientId: client.id },
       search: { page: 1 },
     })
+  }
+
+  // Fetch available users when search query or popover state changes
+  useEffect(() => {
+    if (!showAddUser) return
+
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      setLoadingUsers(true)
+      try {
+        const users = await searchUsersNotInClient({ data: { clientId: client.id, query: userSearchQuery } })
+        setAvailableUsers(users)
+      } catch {
+        setAvailableUsers([])
+      } finally {
+        setLoadingUsers(false)
+      }
+    }, 300)
+
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+    }
+  }, [userSearchQuery, showAddUser, client.id])
+
+  function getUserLabel(user: { name: string | null; email: string | null; clerkUserId: string }) {
+    return user.name || user.email || user.clerkUserId
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -101,12 +150,18 @@ function ClientDetailPage() {
 
   async function handleAddUser(e: React.FormEvent) {
     e.preventDefault()
+    if (!selectedUserId) {
+      setAddUserError('Please select a user')
+      return
+    }
     setAddUserError('')
     setAddingUser(true)
     try {
-      await addUserToOrg({ data: { clientId: client.id, clerkUserId: newClerkUserId, role: newUserRole } })
+      await addUserToOrg({ data: { clientId: client.id, userId: selectedUserId, role: newUserRole } })
       setShowAddUser(false)
-      setNewClerkUserId('')
+      setSelectedUserId('')
+      setSelectedUserLabel('')
+      setUserSearchQuery('')
       setNewUserRole('VIEWER')
       reload()
     } catch (err: unknown) {
@@ -276,14 +331,64 @@ function ClientDetailPage() {
                 )}
                 <form onSubmit={handleAddUser} className="space-y-3">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-foreground">Clerk User ID</label>
-                    <Input
-                      value={newClerkUserId}
-                      onChange={(e) => setNewClerkUserId(e.target.value)}
-                      required
-                      placeholder="user_..."
-                      className="text-sm"
-                    />
+                    <label className="text-xs font-medium text-foreground">User</label>
+                    <Popover open={userSearchOpen} onOpenChange={setUserSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={userSearchOpen}
+                          className="w-full justify-between text-sm font-normal"
+                        >
+                          {selectedUserLabel || 'Select a user...'}
+                          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Search by name or email..."
+                            value={userSearchQuery}
+                            onValueChange={setUserSearchQuery}
+                          />
+                          <CommandList>
+                            {loadingUsers ? (
+                              <div className="py-6 text-center text-sm text-muted-foreground">Searching...</div>
+                            ) : availableUsers.length === 0 ? (
+                              <CommandEmpty>No users found.</CommandEmpty>
+                            ) : (
+                              <CommandGroup>
+                                {availableUsers.map((user) => (
+                                  <CommandItem
+                                    key={user.id}
+                                    value={user.id}
+                                    onSelect={() => {
+                                      setSelectedUserId(user.id)
+                                      setSelectedUserLabel(getUserLabel(user))
+                                      setUserSearchOpen(false)
+                                    }}
+                                  >
+                                    <Check className={cn('mr-2 h-3.5 w-3.5', selectedUserId === user.id ? 'opacity-100' : 'opacity-0')} />
+                                    <Avatar size="sm" className="mr-2">
+                                      {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name || ''} />}
+                                      <AvatarFallback className="text-[10px]">
+                                        {(user.name || user.email || '??').slice(0, 2).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex flex-col">
+                                      <span className="text-sm">{user.name || user.clerkUserId}</span>
+                                      {user.email && (
+                                        <span className="text-xs text-muted-foreground">{user.email}</span>
+                                      )}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-foreground">Role</label>
@@ -299,10 +404,10 @@ function ClientDetailPage() {
                     </Select>
                   </div>
                   <div className="flex gap-2">
-                    <Button type="submit" size="sm" disabled={addingUser}>
+                    <Button type="submit" size="sm" disabled={addingUser || !selectedUserId}>
                       {addingUser ? 'Adding...' : 'Add'}
                     </Button>
-                    <Button type="button" size="sm" variant="ghost" onClick={() => { setShowAddUser(false); setAddUserError('') }}>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => { setShowAddUser(false); setAddUserError(''); setSelectedUserId(''); setSelectedUserLabel(''); setUserSearchQuery('') }}>
                       Cancel
                     </Button>
                   </div>
@@ -321,13 +426,21 @@ function ClientDetailPage() {
                     key={cu.id}
                     className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-4 py-3"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {cu.user.name ?? cu.user.email ?? cu.user.clerkUserId}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Joined {formatDate(cu.createdAt)}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <Avatar size="sm">
+                        {cu.user.avatarUrl && <AvatarImage src={cu.user.avatarUrl} alt={cu.user.name || ''} />}
+                        <AvatarFallback className="text-[10px]">
+                          {(cu.user.name || cu.user.email || '??').slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {cu.user.name ?? cu.user.email ?? cu.user.clerkUserId}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Joined {formatDate(cu.createdAt)}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Select

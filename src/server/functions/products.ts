@@ -45,7 +45,12 @@ export const getProduct = createServerFn({ method: 'GET' })
         _count: {
           select: { ideas: true, issues: true, members: true },
         },
-        members: true,
+        members: {
+          include: {
+            user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         goals: true,
         roadmaps: {
           take: 1,
@@ -139,6 +144,128 @@ export const archiveProduct = createServerFn({ method: 'POST' })
     return prisma.product.update({
       where: { id: data.productId },
       data: { status: 'ARCHIVED' },
+    })
+  })
+
+// ──────────────────────────────────────────────────────
+// Product Members — Server Functions
+// ──────────────────────────────────────────────────────
+
+export const searchOrgUsersNotInProduct = createServerFn({ method: 'GET' })
+  .inputValidator(
+    z.object({
+      productId: z.string(),
+      query: z.string().default(''),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { clientId, role, isDemo } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+
+    // Get users already in the product
+    const existingUserIds = (
+      await prisma.productMember.findMany({
+        where: { productId: data.productId, clientId },
+        select: { userId: true },
+      })
+    ).map((pm) => pm.userId)
+
+    // Search org members not already in the product
+    return prisma.appUser.findMany({
+      where: {
+        memberships: { some: { clientId } },
+        id: { notIn: existingUserIds.length > 0 ? existingUserIds : undefined },
+        ...(data.query
+          ? {
+              OR: [
+                { name: { contains: data.query, mode: 'insensitive' } },
+                { email: { contains: data.query, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+      take: 20,
+      orderBy: { name: 'asc' },
+    })
+  })
+
+export const addProductMember = createServerFn({ method: 'POST' })
+  .inputValidator(
+    z.object({
+      productId: z.string(),
+      userId: z.string().min(1),
+      role: z.enum(['LEAD', 'MEMBER']).default('MEMBER'),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { clientId, role, isDemo } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+
+    // Verify product belongs to this org
+    const product = await prisma.product.findFirst({
+      where: { id: data.productId, clientId },
+    })
+    if (!product) throw new Error('Product not found')
+
+    // Verify user is a member of this org
+    const orgMember = await prisma.clientUser.findUnique({
+      where: { userId_clientId: { userId: data.userId, clientId } },
+    })
+    if (!orgMember) throw new Error('User is not a member of this organization')
+
+    return prisma.productMember.create({
+      data: {
+        productId: data.productId,
+        userId: data.userId,
+        role: data.role,
+        clientId,
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      },
+    })
+  })
+
+export const removeProductMember = createServerFn({ method: 'POST' })
+  .inputValidator(
+    z.object({
+      productId: z.string(),
+      userId: z.string(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { clientId, role, isDemo } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+
+    const member = await prisma.productMember.findFirst({
+      where: { productId: data.productId, userId: data.userId, clientId },
+    })
+    if (!member) throw new Error('Member not found')
+
+    return prisma.productMember.delete({ where: { id: member.id } })
+  })
+
+export const updateProductMemberRole = createServerFn({ method: 'POST' })
+  .inputValidator(
+    z.object({
+      productId: z.string(),
+      userId: z.string(),
+      role: z.enum(['LEAD', 'MEMBER']),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { clientId, role, isDemo } = await requireClientAuth()
+    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+
+    const member = await prisma.productMember.findFirst({
+      where: { productId: data.productId, userId: data.userId, clientId },
+    })
+    if (!member) throw new Error('Member not found')
+
+    return prisma.productMember.update({
+      where: { id: member.id },
+      data: { role: data.role },
     })
   })
 

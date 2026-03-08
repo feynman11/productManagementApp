@@ -1,14 +1,23 @@
 import { useState } from 'react'
-import { MessageSquare, Send, User } from 'lucide-react'
+import { MessageSquare, Send } from 'lucide-react'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
+import { Avatar, AvatarImage, AvatarFallback } from '~/components/ui/avatar'
 import { cn } from '~/lib/utils'
+
+interface CommentAuthor {
+  id: string
+  name: string | null
+  email: string | null
+  avatarUrl: string | null
+}
 
 interface Comment {
   id: string
   content: string
   authorId: string
+  author?: CommentAuthor
   createdAt: string | Date
 }
 
@@ -37,16 +46,22 @@ function formatRelativeDate(dateStr: string | Date) {
   })
 }
 
-function getAvatarColor(authorId: string) {
+function getAvatarColor(id: string) {
   const colors = [
     'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
     'bg-rose-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-fuchsia-500',
   ]
   let hash = 0
-  for (let i = 0; i < authorId.length; i++) {
-    hash = authorId.charCodeAt(i) + ((hash << 5) - hash)
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash)
   }
   return colors[Math.abs(hash) % colors.length]
+}
+
+function getInitials(name: string | null, email: string | null) {
+  if (name) return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  if (email) return email.slice(0, 2).toUpperCase()
+  return '??'
 }
 
 export function CommentThread({
@@ -98,33 +113,39 @@ export function CommentThread({
         </div>
       ) : (
         <div className="space-y-4">
-          {comments.map((comment) => (
-            <div key={comment.id} className="flex gap-3">
-              <div className={cn(
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white text-xs font-medium',
-                getAvatarColor(comment.authorId),
-              )}>
-                {comment.authorId.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-medium text-foreground">
-                    {comment.authorId.slice(0, 8)}...
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatRelativeDate(comment.createdAt)}
-                  </span>
+          {comments.map((comment) => {
+            const author = comment.author
+            const displayName = author?.name || author?.email || comment.authorId.slice(0, 8) + '...'
+            const initials = getInitials(author?.name ?? null, author?.email ?? null)
+
+            return (
+              <div key={comment.id} className="flex gap-3">
+                <Avatar size="sm" className="mt-0.5">
+                  {author?.avatarUrl && <AvatarImage src={author.avatarUrl} alt={displayName} />}
+                  <AvatarFallback className={cn('text-white text-[10px]', getAvatarColor(comment.authorId))}>
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium text-foreground">
+                      {displayName}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatRelativeDate(comment.createdAt)}
+                    </span>
+                  </div>
+                  <Card>
+                    <CardContent className="px-3.5 py-2.5">
+                      <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                        {comment.content}
+                      </p>
+                    </CardContent>
+                  </Card>
                 </div>
-                <Card>
-                  <CardContent className="px-3.5 py-2.5">
-                    <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                      {comment.content}
-                    </p>
-                  </CardContent>
-                </Card>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -136,9 +157,9 @@ export function CommentThread({
             </div>
           )}
           <div className="flex gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <User className="h-3.5 w-3.5" />
-            </div>
+            <Avatar size="sm" className="mt-0.5">
+              <AvatarFallback className="bg-primary/10 text-primary text-[10px]">You</AvatarFallback>
+            </Avatar>
             <div className="flex-1 space-y-2">
               <textarea
                 value={content}

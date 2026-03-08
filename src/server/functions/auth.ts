@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { auth } from '@clerk/tanstack-react-start/server'
 import { prisma } from '~/lib/prisma'
+import { requireAppUser } from '~/lib/auth.server'
 
 /**
  * Fetch basic Clerk auth state for the root route.
@@ -32,8 +33,11 @@ export const getUserContext = createServerFn({ method: 'GET' })
     const { userId: clerkUserId } = await auth()
     if (!clerkUserId) return { authenticated: false as const }
 
-    let appUser = await prisma.appUser.findUnique({
-      where: { clerkUserId },
+    // Uses shared helper that syncs name/email from Clerk
+    const baseUser = await requireAppUser()
+
+    const appUser = await prisma.appUser.findUnique({
+      where: { id: baseUser.id },
       include: {
         memberships: {
           include: { client: { select: { id: true, name: true, slug: true, status: true, isDemo: true } } },
@@ -42,18 +46,7 @@ export const getUserContext = createServerFn({ method: 'GET' })
       },
     })
 
-    if (!appUser) {
-      const isFirst = (await prisma.appUser.count()) === 0
-      appUser = await prisma.appUser.create({
-        data: { clerkUserId, isSuperAdmin: isFirst },
-        include: {
-          memberships: {
-            include: { client: { select: { id: true, name: true, slug: true, status: true, isDemo: true } } },
-          },
-          activeClient: { select: { id: true, slug: true } },
-        },
-      })
-    }
+    if (!appUser) return { authenticated: false as const }
 
     // Include demo org in accessible orgs even without membership
     const demoOrg = await prisma.client.findFirst({

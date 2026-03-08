@@ -16,11 +16,11 @@ import { Route as AuthedOnboardingRouteImport } from './routes/_authed/onboardin
 import { Route as AuthedOrgSlugRouteImport } from './routes/_authed/$orgSlug'
 import { Route as AuthedOrgSlugIndexRouteImport } from './routes/_authed/$orgSlug/index'
 import { Route as AuthedSuperAdminLoginRouteImport } from './routes/_authed/super-admin/login'
-import { Route as AuthedSuperAdminClientsRouteImport } from './routes/_authed/super-admin/clients'
 import { Route as AuthedOrgSlugSettingsRouteImport } from './routes/_authed/$orgSlug/settings'
 import { Route as AuthedOrgSlugProductsRouteImport } from './routes/_authed/$orgSlug/products'
+import { Route as AuthedSuperAdminClientsIndexRouteImport } from './routes/_authed/super-admin/clients/index'
 import { Route as AuthedOrgSlugProductsIndexRouteImport } from './routes/_authed/$orgSlug/products.index'
-import { Route as AuthedSuperAdminClientsClientIdRouteImport } from './routes/_authed/super-admin/clients.$clientId'
+import { Route as AuthedSuperAdminClientsClientIdRouteImport } from './routes/_authed/super-admin/clients/$clientId'
 import { Route as AuthedOrgSlugProductsNewRouteImport } from './routes/_authed/$orgSlug/products.new'
 import { Route as AuthedOrgSlugProductsProductIdRouteImport } from './routes/_authed/$orgSlug/products.$productId'
 import { Route as AuthedOrgSlugProductsProductIdRoadmapRouteImport } from './routes/_authed/$orgSlug/products.$productId.roadmap'
@@ -69,11 +69,6 @@ const AuthedSuperAdminLoginRoute = AuthedSuperAdminLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => AuthedSuperAdminRoute,
 } as any)
-const AuthedSuperAdminClientsRoute = AuthedSuperAdminClientsRouteImport.update({
-  id: '/clients',
-  path: '/clients',
-  getParentRoute: () => AuthedSuperAdminRoute,
-} as any)
 const AuthedOrgSlugSettingsRoute = AuthedOrgSlugSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -84,6 +79,12 @@ const AuthedOrgSlugProductsRoute = AuthedOrgSlugProductsRouteImport.update({
   path: '/products',
   getParentRoute: () => AuthedOrgSlugRoute,
 } as any)
+const AuthedSuperAdminClientsIndexRoute =
+  AuthedSuperAdminClientsIndexRouteImport.update({
+    id: '/clients/',
+    path: '/clients/',
+    getParentRoute: () => AuthedSuperAdminRoute,
+  } as any)
 const AuthedOrgSlugProductsIndexRoute =
   AuthedOrgSlugProductsIndexRouteImport.update({
     id: '/',
@@ -92,9 +93,9 @@ const AuthedOrgSlugProductsIndexRoute =
   } as any)
 const AuthedSuperAdminClientsClientIdRoute =
   AuthedSuperAdminClientsClientIdRouteImport.update({
-    id: '/$clientId',
-    path: '/$clientId',
-    getParentRoute: () => AuthedSuperAdminClientsRoute,
+    id: '/clients/$clientId',
+    path: '/clients/$clientId',
+    getParentRoute: () => AuthedSuperAdminRoute,
   } as any)
 const AuthedOrgSlugProductsNewRoute =
   AuthedOrgSlugProductsNewRouteImport.update({
@@ -182,13 +183,13 @@ export interface FileRoutesByFullPath {
   '/super-admin': typeof AuthedSuperAdminRouteWithChildren
   '/$orgSlug/products': typeof AuthedOrgSlugProductsRouteWithChildren
   '/$orgSlug/settings': typeof AuthedOrgSlugSettingsRoute
-  '/super-admin/clients': typeof AuthedSuperAdminClientsRouteWithChildren
   '/super-admin/login': typeof AuthedSuperAdminLoginRoute
   '/$orgSlug/': typeof AuthedOrgSlugIndexRoute
   '/$orgSlug/products/$productId': typeof AuthedOrgSlugProductsProductIdRouteWithChildren
   '/$orgSlug/products/new': typeof AuthedOrgSlugProductsNewRoute
   '/super-admin/clients/$clientId': typeof AuthedSuperAdminClientsClientIdRoute
   '/$orgSlug/products/': typeof AuthedOrgSlugProductsIndexRoute
+  '/super-admin/clients/': typeof AuthedSuperAdminClientsIndexRoute
   '/$orgSlug/products/$productId/features': typeof AuthedOrgSlugProductsProductIdFeaturesRoute
   '/$orgSlug/products/$productId/ideas': typeof AuthedOrgSlugProductsProductIdIdeasRouteWithChildren
   '/$orgSlug/products/$productId/issues': typeof AuthedOrgSlugProductsProductIdIssuesRouteWithChildren
@@ -206,13 +207,13 @@ export interface FileRoutesByTo {
   '/onboarding': typeof AuthedOnboardingRoute
   '/super-admin': typeof AuthedSuperAdminRouteWithChildren
   '/$orgSlug/settings': typeof AuthedOrgSlugSettingsRoute
-  '/super-admin/clients': typeof AuthedSuperAdminClientsRouteWithChildren
   '/super-admin/login': typeof AuthedSuperAdminLoginRoute
   '/$orgSlug': typeof AuthedOrgSlugIndexRoute
   '/$orgSlug/products/$productId': typeof AuthedOrgSlugProductsProductIdRouteWithChildren
   '/$orgSlug/products/new': typeof AuthedOrgSlugProductsNewRoute
   '/super-admin/clients/$clientId': typeof AuthedSuperAdminClientsClientIdRoute
   '/$orgSlug/products': typeof AuthedOrgSlugProductsIndexRoute
+  '/super-admin/clients': typeof AuthedSuperAdminClientsIndexRoute
   '/$orgSlug/products/$productId/features': typeof AuthedOrgSlugProductsProductIdFeaturesRoute
   '/$orgSlug/products/$productId/releases': typeof AuthedOrgSlugProductsProductIdReleasesRoute
   '/$orgSlug/products/$productId/ideas/$ideaId': typeof AuthedOrgSlugProductsProductIdIdeasIdeaIdRoute
@@ -231,13 +232,13 @@ export interface FileRoutesById {
   '/_authed/super-admin': typeof AuthedSuperAdminRouteWithChildren
   '/_authed/$orgSlug/products': typeof AuthedOrgSlugProductsRouteWithChildren
   '/_authed/$orgSlug/settings': typeof AuthedOrgSlugSettingsRoute
-  '/_authed/super-admin/clients': typeof AuthedSuperAdminClientsRouteWithChildren
   '/_authed/super-admin/login': typeof AuthedSuperAdminLoginRoute
   '/_authed/$orgSlug/': typeof AuthedOrgSlugIndexRoute
   '/_authed/$orgSlug/products/$productId': typeof AuthedOrgSlugProductsProductIdRouteWithChildren
   '/_authed/$orgSlug/products/new': typeof AuthedOrgSlugProductsNewRoute
   '/_authed/super-admin/clients/$clientId': typeof AuthedSuperAdminClientsClientIdRoute
   '/_authed/$orgSlug/products/': typeof AuthedOrgSlugProductsIndexRoute
+  '/_authed/super-admin/clients/': typeof AuthedSuperAdminClientsIndexRoute
   '/_authed/$orgSlug/products/$productId/features': typeof AuthedOrgSlugProductsProductIdFeaturesRoute
   '/_authed/$orgSlug/products/$productId/ideas': typeof AuthedOrgSlugProductsProductIdIdeasRouteWithChildren
   '/_authed/$orgSlug/products/$productId/issues': typeof AuthedOrgSlugProductsProductIdIssuesRouteWithChildren
@@ -259,13 +260,13 @@ export interface FileRouteTypes {
     | '/super-admin'
     | '/$orgSlug/products'
     | '/$orgSlug/settings'
-    | '/super-admin/clients'
     | '/super-admin/login'
     | '/$orgSlug/'
     | '/$orgSlug/products/$productId'
     | '/$orgSlug/products/new'
     | '/super-admin/clients/$clientId'
     | '/$orgSlug/products/'
+    | '/super-admin/clients/'
     | '/$orgSlug/products/$productId/features'
     | '/$orgSlug/products/$productId/ideas'
     | '/$orgSlug/products/$productId/issues'
@@ -283,13 +284,13 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/super-admin'
     | '/$orgSlug/settings'
-    | '/super-admin/clients'
     | '/super-admin/login'
     | '/$orgSlug'
     | '/$orgSlug/products/$productId'
     | '/$orgSlug/products/new'
     | '/super-admin/clients/$clientId'
     | '/$orgSlug/products'
+    | '/super-admin/clients'
     | '/$orgSlug/products/$productId/features'
     | '/$orgSlug/products/$productId/releases'
     | '/$orgSlug/products/$productId/ideas/$ideaId'
@@ -307,13 +308,13 @@ export interface FileRouteTypes {
     | '/_authed/super-admin'
     | '/_authed/$orgSlug/products'
     | '/_authed/$orgSlug/settings'
-    | '/_authed/super-admin/clients'
     | '/_authed/super-admin/login'
     | '/_authed/$orgSlug/'
     | '/_authed/$orgSlug/products/$productId'
     | '/_authed/$orgSlug/products/new'
     | '/_authed/super-admin/clients/$clientId'
     | '/_authed/$orgSlug/products/'
+    | '/_authed/super-admin/clients/'
     | '/_authed/$orgSlug/products/$productId/features'
     | '/_authed/$orgSlug/products/$productId/ideas'
     | '/_authed/$orgSlug/products/$productId/issues'
@@ -383,13 +384,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSuperAdminLoginRouteImport
       parentRoute: typeof AuthedSuperAdminRoute
     }
-    '/_authed/super-admin/clients': {
-      id: '/_authed/super-admin/clients'
-      path: '/clients'
-      fullPath: '/super-admin/clients'
-      preLoaderRoute: typeof AuthedSuperAdminClientsRouteImport
-      parentRoute: typeof AuthedSuperAdminRoute
-    }
     '/_authed/$orgSlug/settings': {
       id: '/_authed/$orgSlug/settings'
       path: '/settings'
@@ -404,6 +398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgSlugProductsRouteImport
       parentRoute: typeof AuthedOrgSlugRoute
     }
+    '/_authed/super-admin/clients/': {
+      id: '/_authed/super-admin/clients/'
+      path: '/clients'
+      fullPath: '/super-admin/clients/'
+      preLoaderRoute: typeof AuthedSuperAdminClientsIndexRouteImport
+      parentRoute: typeof AuthedSuperAdminRoute
+    }
     '/_authed/$orgSlug/products/': {
       id: '/_authed/$orgSlug/products/'
       path: '/'
@@ -413,10 +414,10 @@ declare module '@tanstack/react-router' {
     }
     '/_authed/super-admin/clients/$clientId': {
       id: '/_authed/super-admin/clients/$clientId'
-      path: '/$clientId'
+      path: '/clients/$clientId'
       fullPath: '/super-admin/clients/$clientId'
       preLoaderRoute: typeof AuthedSuperAdminClientsClientIdRouteImport
-      parentRoute: typeof AuthedSuperAdminClientsRoute
+      parentRoute: typeof AuthedSuperAdminRoute
     }
     '/_authed/$orgSlug/products/new': {
       id: '/_authed/$orgSlug/products/new'
@@ -627,28 +628,16 @@ const AuthedOrgSlugRouteWithChildren = AuthedOrgSlugRoute._addFileChildren(
   AuthedOrgSlugRouteChildren,
 )
 
-interface AuthedSuperAdminClientsRouteChildren {
-  AuthedSuperAdminClientsClientIdRoute: typeof AuthedSuperAdminClientsClientIdRoute
-}
-
-const AuthedSuperAdminClientsRouteChildren: AuthedSuperAdminClientsRouteChildren =
-  {
-    AuthedSuperAdminClientsClientIdRoute: AuthedSuperAdminClientsClientIdRoute,
-  }
-
-const AuthedSuperAdminClientsRouteWithChildren =
-  AuthedSuperAdminClientsRoute._addFileChildren(
-    AuthedSuperAdminClientsRouteChildren,
-  )
-
 interface AuthedSuperAdminRouteChildren {
-  AuthedSuperAdminClientsRoute: typeof AuthedSuperAdminClientsRouteWithChildren
   AuthedSuperAdminLoginRoute: typeof AuthedSuperAdminLoginRoute
+  AuthedSuperAdminClientsClientIdRoute: typeof AuthedSuperAdminClientsClientIdRoute
+  AuthedSuperAdminClientsIndexRoute: typeof AuthedSuperAdminClientsIndexRoute
 }
 
 const AuthedSuperAdminRouteChildren: AuthedSuperAdminRouteChildren = {
-  AuthedSuperAdminClientsRoute: AuthedSuperAdminClientsRouteWithChildren,
   AuthedSuperAdminLoginRoute: AuthedSuperAdminLoginRoute,
+  AuthedSuperAdminClientsClientIdRoute: AuthedSuperAdminClientsClientIdRoute,
+  AuthedSuperAdminClientsIndexRoute: AuthedSuperAdminClientsIndexRoute,
 }
 
 const AuthedSuperAdminRouteWithChildren =

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
-import { Plus, X, AlertCircle } from 'lucide-react'
+import { Plus, X, AlertCircle, Users } from 'lucide-react'
 import {
   getClients,
   createClient,
@@ -25,7 +25,7 @@ const searchSchema = z.object({
   page: z.number().int().positive().catch(1),
 })
 
-export const Route = createFileRoute('/_authed/super-admin/clients')({
+export const Route = createFileRoute('/_authed/super-admin/clients/')({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => ({ page: search.page }),
   loader: ({ deps }) => getClients({ data: { page: deps.page, limit: 20 } }),
@@ -186,6 +186,7 @@ function ClientsPage() {
               <TableHead>Name</TableHead>
               <TableHead>Slug</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Users</TableHead>
               <TableHead>Created</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -194,7 +195,7 @@ function ClientsPage() {
             {data.clients.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="py-12 text-center text-sm text-muted-foreground"
                 >
                   No clients found. Create one to get started.
@@ -213,6 +214,12 @@ function ClientsPage() {
                     <Badge variant={STATUS_VARIANT[client.status] ?? 'secondary'}>
                       {client.status.replace('_', ' ')}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Users className="h-3.5 w-3.5" />
+                      {client._count.clientUsers}
+                    </span>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatDate(client.createdAt)}

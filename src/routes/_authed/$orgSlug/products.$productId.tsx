@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import {
   ArrowLeft,
   Lightbulb,
@@ -19,9 +19,23 @@ import {
   ChevronRight,
   Diamond,
   Calendar,
+  Plus,
+  Trash2,
+  ChevronsUpDown,
+  Palette,
 } from 'lucide-react'
-import { getProduct, updateProduct, archiveProduct } from '~/server/functions/products'
+import {
+  getProduct,
+  updateProduct,
+  archiveProduct,
+  searchOrgUsersNotInProduct,
+  addProductMember,
+  removeProductMember,
+  updateProductMemberRole,
+} from '~/server/functions/products'
 import { StatusBadge } from '~/components/common/status-badge'
+import { IconPicker } from '~/components/common/icon-picker'
+import { getProductIcon } from '~/lib/product-icons'
 import { canWrite, canAdmin } from '~/lib/permissions'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
@@ -29,6 +43,27 @@ import { Input } from '~/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Separator } from '~/components/ui/separator'
+import { Avatar, AvatarImage, AvatarFallback } from '~/components/ui/avatar'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '~/components/ui/command'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select'
 
 export const Route = createFileRoute('/_authed/$orgSlug/products/$productId')({
   loader: ({ params }) => getProduct({ data: { productId: params.productId } }),
@@ -368,6 +403,84 @@ function ProductDetailPage() {
   )
   const [editVision, setEditVision] = useState(product.vision ?? '')
   const [editStrategy, setEditStrategy] = useState(product.strategy ?? '')
+  const [editColor, setEditColor] = useState(product.color)
+  const [editIcon, setEditIcon] = useState(product.icon ?? 'package')
+
+  // Team member management state
+  const [showAddMember, setShowAddMember] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [selectedUserLabel, setSelectedUserLabel] = useState('')
+  const [memberSearchOpen, setMemberSearchOpen] = useState(false)
+  const [memberSearchQuery, setMemberSearchQuery] = useState('')
+  const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; name: string | null; email: string | null; avatarUrl: string | null }>>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const [newMemberRole, setNewMemberRole] = useState<'LEAD' | 'MEMBER'>('MEMBER')
+  const [addingMember, setAddingMember] = useState(false)
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Fetch available users when search query changes
+  useEffect(() => {
+    if (!showAddMember) return
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+    searchTimeoutRef.current = setTimeout(async () => {
+      setLoadingUsers(true)
+      try {
+        const users = await searchOrgUsersNotInProduct({ data: { productId, query: memberSearchQuery } })
+        setAvailableUsers(users)
+      } catch {
+        setAvailableUsers([])
+      } finally {
+        setLoadingUsers(false)
+      }
+    }, 300)
+    return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current) }
+  }, [memberSearchQuery, showAddMember, productId])
+
+  function getUserLabel(user: { name: string | null; email: string | null }) {
+    return user.name || user.email || 'Unknown'
+  }
+
+  function getInitials(name: string | null, email: string | null) {
+    if (name) return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    if (email) return email.slice(0, 2).toUpperCase()
+    return '??'
+  }
+
+  function reload() {
+    navigate({ to: '/$orgSlug/products/$productId', params: { orgSlug, productId } })
+  }
+
+  async function handleAddMember(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedUserId) return
+    setAddingMember(true)
+    try {
+      await addProductMember({ data: { productId, userId: selectedUserId, role: newMemberRole } })
+      setShowAddMember(false)
+      setSelectedUserId('')
+      setSelectedUserLabel('')
+      setMemberSearchQuery('')
+      setNewMemberRole('MEMBER')
+      reload()
+    } catch { /* */ } finally {
+      setAddingMember(false)
+    }
+  }
+
+  async function handleRemoveMember(userId: string) {
+    if (!confirm('Remove this member from the product?')) return
+    try {
+      await removeProductMember({ data: { productId, userId } })
+      reload()
+    } catch { /* */ }
+  }
+
+  async function handleMemberRoleChange(userId: string, role: 'LEAD' | 'MEMBER') {
+    try {
+      await updateProductMemberRole({ data: { productId, userId, role } })
+      reload()
+    } catch { /* */ }
+  }
 
   const routerState = useRouterState()
   const currentPath = routerState.location.pathname
@@ -388,6 +501,8 @@ function ProductDetailPage() {
           description: editDescription || undefined,
           vision: editVision || undefined,
           strategy: editStrategy || undefined,
+          color: editColor,
+          icon: editIcon || undefined,
         },
       })
       setEditing(false)
@@ -471,7 +586,14 @@ function ProductDetailPage() {
                 className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
                 style={{ backgroundColor: `${product.color}15` }}
               >
-                <Package className="h-4 w-4" style={{ color: product.color }} />
+                {(() => {
+                  const Icon = getProductIcon(product.icon)
+                  return Icon ? (
+                    <Icon className="h-4 w-4" style={{ color: product.color }} />
+                  ) : (
+                    <Package className="h-4 w-4" style={{ color: product.color }} />
+                  )
+                })()}
               </div>
               <div>
                 <h2 className="page-heading">{product.name}</h2>
@@ -596,6 +718,195 @@ function ProductDetailPage() {
                     className="flex w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm resize-none dark:bg-input/30"
                   />
                 </div>
+
+                {/* Color & Icon */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Palette className="h-3.5 w-3.5" />
+                        Color
+                      </span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6', '#06B6D4'].map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setEditColor(c)}
+                            className={cn(
+                              'h-7 w-7 rounded-md border-2 transition-all duration-150',
+                              editColor === c
+                                ? 'border-foreground scale-110 shadow-sm'
+                                : 'border-transparent hover:scale-105',
+                            )}
+                            style={{ backgroundColor: c }}
+                            aria-label={`Select color ${c}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Icon</label>
+                    <IconPicker value={editIcon} onChange={setEditIcon} color={editColor} />
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Team Members */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-blue-500" />
+                      <label className="text-sm font-medium text-foreground">Team Members</label>
+                      <span className="text-xs text-muted-foreground">({product.members.length})</span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      onClick={() => setShowAddMember(!showAddMember)}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Member
+                    </Button>
+                  </div>
+
+                  {showAddMember && (
+                    <div className="rounded-lg border border-border p-4">
+                      <form onSubmit={handleAddMember} className="space-y-3">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground">User</label>
+                          <Popover open={memberSearchOpen} onOpenChange={setMemberSearchOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={memberSearchOpen}
+                                className="w-full justify-between text-sm font-normal"
+                                type="button"
+                              >
+                                {selectedUserLabel || 'Select a team member...'}
+                                <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                              <Command shouldFilter={false}>
+                                <CommandInput
+                                  placeholder="Search by name or email..."
+                                  value={memberSearchQuery}
+                                  onValueChange={setMemberSearchQuery}
+                                />
+                                <CommandList>
+                                  {loadingUsers ? (
+                                    <div className="py-6 text-center text-sm text-muted-foreground">Searching...</div>
+                                  ) : availableUsers.length === 0 ? (
+                                    <CommandEmpty>No users found.</CommandEmpty>
+                                  ) : (
+                                    <CommandGroup>
+                                      {availableUsers.map((user) => (
+                                        <CommandItem
+                                          key={user.id}
+                                          value={user.id}
+                                          onSelect={() => {
+                                            setSelectedUserId(user.id)
+                                            setSelectedUserLabel(getUserLabel(user))
+                                            setMemberSearchOpen(false)
+                                          }}
+                                        >
+                                          <Check className={cn('mr-2 h-3.5 w-3.5', selectedUserId === user.id ? 'opacity-100' : 'opacity-0')} />
+                                          <Avatar size="sm" className="mr-2">
+                                            {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name || ''} />}
+                                            <AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback>
+                                          </Avatar>
+                                          <div className="flex flex-col">
+                                            <span className="text-sm">{user.name || user.email}</span>
+                                            {user.name && user.email && (
+                                              <span className="text-xs text-muted-foreground">{user.email}</span>
+                                            )}
+                                          </div>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  )}
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground">Role</label>
+                          <Select value={newMemberRole} onValueChange={(v) => setNewMemberRole(v as typeof newMemberRole)}>
+                            <SelectTrigger className="text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="LEAD">Lead</SelectItem>
+                              <SelectItem value="MEMBER">Member</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button type="submit" size="sm" disabled={addingMember || !selectedUserId}>
+                            {addingMember ? 'Adding...' : 'Add'}
+                          </Button>
+                          <Button type="button" size="sm" variant="ghost" onClick={() => { setShowAddMember(false); setSelectedUserId(''); setSelectedUserLabel(''); setMemberSearchQuery('') }}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {product.members.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No team members yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {product.members.map((member: any) => (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-2.5"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Avatar size="sm">
+                              {member.user?.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={member.user?.name || ''} />}
+                              <AvatarFallback>{getInitials(member.user?.name, member.user?.email)}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm text-foreground">
+                              {member.user?.name || member.user?.email || member.userId.slice(0, 12) + '...'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={member.role}
+                              onValueChange={(v) => handleMemberRoleChange(member.userId, v as 'LEAD' | 'MEMBER')}
+                            >
+                              <SelectTrigger className="h-7 text-xs w-[90px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="LEAD">Lead</SelectItem>
+                                <SelectItem value="MEMBER">Member</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => handleRemoveMember(member.userId)}
+                              type="button"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ) : (
@@ -706,11 +1017,12 @@ function ProductDetailPage() {
                           className="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-2.5"
                         >
                           <div className="flex items-center gap-2.5">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium">
-                              {(member.userId || 'U').slice(0, 2).toUpperCase()}
-                            </div>
-                            <span className="text-sm text-foreground font-mono text-xs">
-                              {(member.userId || '').slice(0, 12)}...
+                            <Avatar size="sm">
+                              {member.user?.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={member.user?.name || ''} />}
+                              <AvatarFallback>{getInitials(member.user?.name, member.user?.email)}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm text-foreground">
+                              {member.user?.name || member.user?.email || member.userId.slice(0, 12) + '...'}
                             </span>
                           </div>
                           <span
