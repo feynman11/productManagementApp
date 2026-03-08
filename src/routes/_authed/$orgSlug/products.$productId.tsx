@@ -23,6 +23,7 @@ import {
   Trash2,
   ChevronsUpDown,
   Palette,
+  Zap,
 } from 'lucide-react'
 import {
   getProduct,
@@ -495,7 +496,40 @@ function ProductDetailPage() {
   const isRoadmapTab = currentPath.includes('/roadmap')
   const isIssuesTab = currentPath.includes('/issues')
   const isReleasesTab = currentPath.includes('/releases')
-  const isOverview = !isIdeasTab && !isFeaturesTab && !isRoadmapTab && !isIssuesTab && !isReleasesTab
+  const isGoalsTab = currentPath.includes('/goals')
+  const isActionsTab = currentPath.includes('/actions')
+  const isOverview = !isIdeasTab && !isFeaturesTab && !isRoadmapTab && !isIssuesTab && !isReleasesTab && !isGoalsTab && !isActionsTab
+
+  const hasUnsavedChanges = editing && (
+    editName !== product.name ||
+    editDescription !== (product.description ?? '') ||
+    editVision !== (product.vision ?? '') ||
+    editStrategy !== (product.strategy ?? '') ||
+    editColor !== product.color ||
+    editIcon !== (product.icon ?? 'package')
+  )
+
+  function cancelEditing() {
+    setEditing(false)
+    setEditName(product.name)
+    setEditDescription(product.description ?? '')
+    setEditVision(product.vision ?? '')
+    setEditStrategy(product.strategy ?? '')
+    setEditColor(product.color)
+    setEditIcon(product.icon ?? 'package')
+  }
+
+  function handleTabClick(e: React.MouseEvent, href: string, isActive: boolean) {
+    if (isActive) return
+    if (editing) {
+      e.preventDefault()
+      if (hasUnsavedChanges) {
+        if (!confirm('You have unsaved changes. Discard and switch tabs?')) return
+      }
+      cancelEditing()
+      navigate({ to: href })
+    }
+  }
 
   async function handleSaveEdit() {
     setSaving(true)
@@ -568,6 +602,18 @@ function ProductDetailPage() {
       isActive: isRoadmapTab,
       icon: Map,
     },
+    {
+      label: 'Goals',
+      href: `/${orgSlug}/products/${productId}/goals`,
+      isActive: isGoalsTab,
+      icon: Target,
+    },
+    {
+      label: 'Actions',
+      href: `/${orgSlug}/products/${productId}/actions`,
+      isActive: isActionsTab,
+      icon: Zap,
+    },
   ]
 
   return (
@@ -618,13 +664,13 @@ function ProductDetailPage() {
 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
-          {userCanWrite && !editing && (
+          {isOverview && userCanWrite && !editing && (
             <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
               <Pencil className="h-3.5 w-3.5" />
               Edit
             </Button>
           )}
-          {userCanAdmin && product.status !== 'ARCHIVED' && (
+          {editing && userCanAdmin && product.status !== 'ARCHIVED' && (
             <Button variant="destructive" size="sm" onClick={handleArchive}>
               <Archive className="h-3.5 w-3.5" />
               Archive
@@ -642,6 +688,7 @@ function ProductDetailPage() {
               <Link
                 key={tab.label}
                 to={tab.href}
+                onClick={(e) => handleTabClick(e, tab.href, tab.isActive)}
                 className={cn(
                   'inline-flex items-center gap-2 rounded-t-lg px-4 pb-3 pt-2 text-sm font-medium transition-all duration-150 whitespace-nowrap',
                   tab.isActive
@@ -680,7 +727,7 @@ function ProductDetailPage() {
                     <Button
                       variant="secondary"
                       size="xs"
-                      onClick={() => setEditing(false)}
+                      onClick={cancelEditing}
                     >
                       <X className="h-3.5 w-3.5" />
                       Cancel

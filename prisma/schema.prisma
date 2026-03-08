@@ -91,6 +91,19 @@ enum IssueStatus {
   WONT_FIX
 }
 
+enum ActionItemStatus {
+  NEW
+  IN_PROGRESS
+  DONE
+}
+
+enum ActionItemPriority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
 enum NotificationType {
   IDEA_VOTED
   IDEA_STATUS_CHANGED
@@ -123,6 +136,8 @@ model AppUser {
   reportedIssues   Issue[]   @relation("IssueReporter")
   assignedIssues   Issue[]   @relation("IssueAssignee")
   authoredComments Comment[] @relation("CommentAuthor")
+  raisedActions    ActionItem[] @relation("ActionRaisedBy")
+  assignedActions  ActionItem[] @relation("ActionAssignee")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -145,6 +160,7 @@ model Client {
   ideas          Idea[]
   roadmaps       Roadmap[]
   issues         Issue[]
+  actionItems    ActionItem[]
   notifications  Notification[]
   activeUsers    AppUser[]      @relation("activeClient")
 
@@ -195,6 +211,7 @@ model Product {
   roadmaps     Roadmap[]
   issues       Issue[]
   goals        Goal[]
+  actionItems  ActionItem[]
   customFields CustomField[]
 
   createdAt DateTime @default(now())
@@ -399,6 +416,38 @@ model Goal {
   @@index([productId])
 }
 
+model ActionItem {
+  id          String             @id @default(cuid())
+  /// @zod.string.min(1).max(200)
+  title       String
+  description String?
+  status      ActionItemStatus   @default(NEW)
+  priority    ActionItemPriority @default(MEDIUM)
+  dueDate     DateTime?
+
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  raisedBy   AppUser @relation("ActionRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
+  raisedById String
+
+  assignee   AppUser? @relation("ActionAssignee", fields: [assigneeId], references: [id])
+  assigneeId String?
+
+  comments Comment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([clientId])
+  @@index([assigneeId])
+  @@index([status])
+}
+
 model Comment {
   id       String  @id @default(cuid())
   content  String
@@ -414,12 +463,16 @@ model Comment {
   roadmapItem   RoadmapItem? @relation(fields: [roadmapItemId], references: [id], onDelete: Cascade)
   roadmapItemId String?
 
+  actionItem   ActionItem? @relation(fields: [actionItemId], references: [id], onDelete: Cascade)
+  actionItemId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([ideaId])
   @@index([issueId])
   @@index([roadmapItemId])
+  @@index([actionItemId])
   @@index([authorId])
 }
 

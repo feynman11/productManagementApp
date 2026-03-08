@@ -242,7 +242,7 @@ async function main() {
     data: {
       title: 'AI-powered task auto-assignment',
       description: 'Use machine learning to automatically assign tasks to the best team member based on skills, workload, and past performance. The system would learn from historical assignment patterns and optimize for balanced workloads.',
-      status: 'PLANNED',
+      status: 'UNDER_REVIEW',
       clientId: demo.id, productId: demoTaskFlow.id,
       authorId: superAdminUser.id,
       riceReach: 8000, riceImpact: 3, riceConfidence: 0.7, riceEffort: 6,
@@ -307,7 +307,7 @@ async function main() {
     data: {
       title: 'Sentiment trend dashboard',
       description: 'A real-time dashboard showing sentiment trends across all feedback channels. Include ability to drill down by product area, customer segment, and time period.',
-      status: 'PLANNED',
+      status: 'UNDER_REVIEW',
       clientId: demo.id, productId: demoInsightHub.id,
       authorId: acmeContribUser.id,
       riceReach: 4000, riceImpact: 3, riceConfidence: 0.9, riceEffort: 4,
@@ -346,7 +346,7 @@ async function main() {
     data: {
       title: 'Interactive API playground',
       description: 'Build a browser-based API explorer where developers can make live API calls, see responses, and generate code snippets in multiple languages.',
-      status: 'PLANNED',
+      status: 'UNDER_REVIEW',
       clientId: demo.id, productId: demoDevPortal.id,
       authorId: tsAdminUser.id,
       riceReach: 3000, riceImpact: 3, riceConfidence: 0.8, riceEffort: 5,
@@ -667,7 +667,7 @@ async function main() {
     data: {
       title: 'Add dark mode support',
       description: 'Users have been requesting dark mode for eye strain reduction.',
-      status: 'PLANNED', clientId: acme.id, productId: acmeWebApp.id,
+      status: 'UNDER_REVIEW', clientId: acme.id, productId: acmeWebApp.id,
       authorId: acmeContribUser.id,
       riceReach: 5000, riceImpact: 2, riceConfidence: 0.8, riceEffort: 3,
       riceScore: 2666.67, votes: 47,
@@ -809,7 +809,7 @@ async function main() {
     data: {
       title: 'Funnel visualization widget',
       description: 'Drag-and-drop funnel chart for conversion analysis.',
-      status: 'PLANNED', clientId: techstart.id, productId: tsAnalytics.id,
+      status: 'UNDER_REVIEW', clientId: techstart.id, productId: tsAnalytics.id,
       authorId: tsAdminUser.id,
       riceReach: 4000, riceImpact: 3, riceConfidence: 0.9, riceEffort: 4,
       riceScore: 2700.0, votes: 56,

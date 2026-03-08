@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState, useMemo } from 'react'
 import {
   Layers,
+  Plus,
   Rocket,
   Calendar,
   Eye,
@@ -9,7 +10,7 @@ import {
   X,
   Check,
 } from 'lucide-react'
-import { getProductFeatures, getProductReleases, updateRoadmapItem, moveRoadmapItem } from '~/server/functions/roadmap'
+import { getProductFeatures, getProductReleases, getOrCreateProductRoadmap, createRoadmapItem, updateRoadmapItem, moveRoadmapItem } from '~/server/functions/roadmap'
 import { canProductWrite } from '~/lib/permissions'
 import type { EffectiveProductRole } from '~/lib/permissions'
 import { cn } from '~/lib/utils'
@@ -33,7 +34,8 @@ export const Route = createFileRoute(
     Promise.all([
       getProductFeatures({ data: { productId: params.productId } }),
       getProductReleases({ data: { productId: params.productId } }),
-    ]).then(([features, releases]) => ({ features, releases })),
+      getOrCreateProductRoadmap({ data: { productId: params.productId } }),
+    ]).then(([features, releases, roadmap]) => ({ features, releases, roadmapId: roadmap.id })),
   component: FeaturesPage,
 })
 
@@ -368,14 +370,190 @@ function FeatureDetailPanel({
 // Page
 // ──────────────────────────────────────────────────────
 
+function AddFeaturePanel({
+  roadmapId,
+  releases,
+  onClose,
+  onSuccess,
+}: {
+  roadmapId: string
+  releases: Release[]
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState('0')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [releaseId, setReleaseId] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      await createRoadmapItem({
+        data: {
+          roadmapId,
+          title,
+          description: description || undefined,
+          priority: Number(priority),
+          startDate: startDate ? new Date(startDate) : undefined,
+          endDate: endDate ? new Date(endDate) : undefined,
+          releaseId: releaseId || undefined,
+        },
+      })
+      onSuccess()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to add feature')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Card
+      className="p-0"
+      style={{ animation: 'dash-fade-in 0.25s ease-out both' }}
+    >
+      <CardHeader className="flex-row items-center justify-between px-5 py-4">
+        <CardTitle className="text-sm font-heading">Add Feature</CardTitle>
+        <Button variant="ghost" size="icon-sm" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </CardHeader>
+      <CardContent className="px-5 pb-5 pt-0">
+        {error && (
+          <div className="mb-4 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive">
+            {error}
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-medium text-muted-foreground">
+                Title <span className="text-destructive">*</span>
+              </label>
+              <Input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                maxLength={200}
+                placeholder="Feature name"
+                className="h-9 text-sm"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-medium text-muted-foreground">
+                Description
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+                placeholder="What does this feature do?"
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none md:text-sm dark:bg-input/30"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Start Date
+              </label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                End Date
+              </label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Priority
+              </label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger className="h-9 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">None</SelectItem>
+                  <SelectItem value="1">Low</SelectItem>
+                  <SelectItem value="2">Medium</SelectItem>
+                  <SelectItem value="3">High</SelectItem>
+                  <SelectItem value="4">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Release
+              </label>
+              <Select value={releaseId || 'none'} onValueChange={(v) => setReleaseId(v === 'none' ? '' : v)}>
+                <SelectTrigger className="h-9 w-full text-sm">
+                  <SelectValue placeholder="No release" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No release</SelectItem>
+                  {releases.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={submitting || !title.trim()}
+            >
+              {submitting ? 'Adding...' : 'Add Feature'}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ──────────────────────────────────────────────────────
+// Page
+// ──────────────────────────────────────────────────────
+
 function FeaturesPage() {
-  const { features, releases } = Route.useLoaderData()
+  const { features, releases, roadmapId } = Route.useLoaderData()
   const router = useRouter()
   const { productRole } = Route.useRouteContext() as { productRole?: EffectiveProductRole }
   const userCanWrite = canProductWrite(productRole ?? null)
 
   const [showCompleted, setShowCompleted] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [showAddForm, setShowAddForm] = useState(false)
 
   const filtered = useMemo(() => {
     if (showCompleted) return features
@@ -391,17 +569,41 @@ function FeaturesPage() {
     router.invalidate()
   }
 
-  if (features.length === 0) {
+  if (features.length === 0 && !showAddForm) {
     return (
-      <Card className="flex flex-col items-center justify-center py-14 px-6 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 mb-3">
-          <Layers className="h-6 w-6 text-emerald-500" />
-        </div>
-        <h3 className="font-heading font-semibold text-foreground mb-1">No features yet</h3>
-        <p className="text-sm text-muted-foreground max-w-sm">
-          Add features from the Roadmap view or the dashboard.
-        </p>
-      </Card>
+      <div className="space-y-4">
+        <Card className="flex flex-col items-center justify-center py-14 px-6 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 mb-3">
+            <Layers className="h-6 w-6 text-emerald-500" />
+          </div>
+          <h3 className="font-heading font-semibold text-foreground mb-1">No features yet</h3>
+          <p className="text-sm text-muted-foreground max-w-sm mb-4">
+            Create your first feature to start planning.
+          </p>
+          {userCanWrite && (
+            <Button size="sm" onClick={() => setShowAddForm(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Feature
+            </Button>
+          )}
+        </Card>
+      </div>
+    )
+  }
+
+  if (features.length === 0 && showAddForm) {
+    return (
+      <div className="space-y-4">
+        <AddFeaturePanel
+          roadmapId={roadmapId}
+          releases={releases}
+          onClose={() => setShowAddForm(false)}
+          onSuccess={() => {
+            setShowAddForm(false)
+            router.invalidate()
+          }}
+        />
+      </div>
     )
   }
 
@@ -418,18 +620,39 @@ function FeaturesPage() {
             </span>
           )}
         </p>
-        {completedCount > 0 && (
-          <Button
-            variant={showCompleted ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setShowCompleted(!showCompleted)}
-            className={showCompleted ? 'bg-primary/10 text-primary hover:bg-primary/15' : ''}
-          >
-            {showCompleted ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-            {showCompleted ? 'Showing all' : 'Show completed'}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {completedCount > 0 && (
+            <Button
+              variant={showCompleted ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setShowCompleted(!showCompleted)}
+              className={showCompleted ? 'bg-primary/10 text-primary hover:bg-primary/15' : ''}
+            >
+              {showCompleted ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+              {showCompleted ? 'Showing all' : 'Show completed'}
+            </Button>
+          )}
+          {userCanWrite && !showAddForm && (
+            <Button size="sm" onClick={() => { setShowAddForm(true); setSelectedId(null) }}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Feature
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Add feature form */}
+      {showAddForm && (
+        <AddFeaturePanel
+          roadmapId={roadmapId}
+          releases={releases}
+          onClose={() => setShowAddForm(false)}
+          onSuccess={() => {
+            setShowAddForm(false)
+            router.invalidate()
+          }}
+        />
+      )}
 
       {/* Feature list */}
       <div className="space-y-2">

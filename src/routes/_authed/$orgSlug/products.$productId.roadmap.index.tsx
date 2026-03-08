@@ -281,12 +281,12 @@ function AddFeaturePanel({
               <label className="text-xs font-medium text-muted-foreground">
                 Release
               </label>
-              <Select value={releaseId} onValueChange={setReleaseId}>
+              <Select value={releaseId || 'none'} onValueChange={(v) => setReleaseId(v === 'none' ? '' : v)}>
                 <SelectTrigger className="h-9 w-full text-sm">
                   <SelectValue placeholder="No release" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No release</SelectItem>
+                  <SelectItem value="none">No release</SelectItem>
                   {releases.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
                       {r.name}
@@ -584,12 +584,12 @@ function UnscheduledCard({
                   </div>
                 </div>
                 {releases.length > 0 && (
-                  <Select value={releaseId} onValueChange={setReleaseId}>
+                  <Select value={releaseId || 'none'} onValueChange={(v) => setReleaseId(v === 'none' ? '' : v)}>
                     <SelectTrigger className="h-7 w-full text-[11px]">
                       <SelectValue placeholder="No release" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No release</SelectItem>
+                      <SelectItem value="none">No release</SelectItem>
                       {releases.map((r) => (
                         <SelectItem key={r.id} value={r.id}>
                           {r.name}

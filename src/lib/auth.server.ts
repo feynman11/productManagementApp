@@ -148,9 +148,10 @@ async function fetchClerkProfile(clerkUserId: string) {
     )?.emailAddress ?? user.emailAddresses[0]?.emailAddress ?? null
     const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || null
     const avatarUrl = user.imageUrl || null
-    return { name, email, avatarUrl }
+    const publicMetadata = (user.publicMetadata ?? {}) as Record<string, unknown>
+    return { name, email, avatarUrl, publicMetadata }
   } catch {
-    return { name: null, email: null, avatarUrl: null }
+    return { name: null, email: null, avatarUrl: null, publicMetadata: null }
   }
 }
 
@@ -163,26 +164,118 @@ async function getOrCreateAppUser(clerkUserId: string) {
     where: { clerkUserId },
   })
 
+  let publicMetadata: Record<string, unknown> | null = null
+
   if (!appUser) {
     const isFirst = (await prisma.appUser.count()) === 0
-    const { name, email, avatarUrl } = await fetchClerkProfile(clerkUserId)
+    const profile = await fetchClerkProfile(clerkUserId)
+    publicMetadata = profile.publicMetadata
     appUser = await prisma.appUser.create({
-      data: { clerkUserId, isSuperAdmin: isFirst, name, email, avatarUrl },
+      data: { clerkUserId, isSuperAdmin: isFirst, name: profile.name, email: profile.email, avatarUrl: profile.avatarUrl },
     })
   } else if (!appUser.name || !appUser.email || !appUser.avatarUrl) {
-    const { name, email, avatarUrl } = await fetchClerkProfile(clerkUserId)
-    if (name || email || avatarUrl) {
+    const profile = await fetchClerkProfile(clerkUserId)
+    publicMetadata = profile.publicMetadata
+    if (profile.name || profile.email || profile.avatarUrl) {
       appUser = await prisma.appUser.update({
         where: { id: appUser.id },
         data: {
-          ...(name && !appUser.name ? { name } : {}),
-          ...(email && !appUser.email ? { email } : {}),
-          ...(avatarUrl && !appUser.avatarUrl ? { avatarUrl } : {}),
+          ...(profile.name && !appUser.name ? { name: profile.name } : {}),
+          ...(profile.email && !appUser.email ? { email: profile.email } : {}),
+          ...(profile.avatarUrl && !appUser.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
         },
       })
     }
   }
 
+  // Process pending invitation metadata from Clerk
+  await processPendingInvitations(clerkUserId, appUser.id, publicMetadata)
+
+  return appUser
+}
+
+/**
+ * Process pending invitation metadata from Clerk publicMetadata.
+ * Auto-creates ClientUser records for any pending org invitations.
+ */
+async function processPendingInvitations(
+  clerkUserId: string,
+  appUserId: string,
+  publicMetadata: Record<string, unknown> | null,
+) {
+  try {
+    // If we didn't fetch metadata yet (profile was already complete), fetch it now
+    if (publicMetadata === null) {
+      const profile = await fetchClerkProfile(clerkUserId)
+      publicMetadata = profile.publicMetadata
+    }
+    if (!publicMetadata) return
+
+    const pending = publicMetadata.pendingInvitations as Array<{
+      clientId: string
+      role: 'ADMIN' | 'CONTRIBUTOR' | 'VIEWER'
+    }> | undefined
+
+    if (!pending || pending.length === 0) return
+
+    let setActiveClient = false
+
+    for (const inv of pending) {
+      // Verify org exists and is active
+      const client = await prisma.client.findUnique({
+        where: { id: inv.clientId },
+        select: { id: true, status: true, isDemo: true },
+      })
+      if (!client || client.status !== 'ACTIVE' || client.isDemo) continue
+
+      // Skip if already a member (idempotent)
+      const existing = await prisma.clientUser.findUnique({
+        where: { userId_clientId: { userId: appUserId, clientId: inv.clientId } },
+      })
+      if (existing) continue
+
+      await prisma.clientUser.create({
+        data: {
+          userId: appUserId,
+          clientId: inv.clientId,
+          role: inv.role,
+        },
+      })
+
+      if (!setActiveClient) {
+        // Set the first invited org as the active org if user has none
+        const user = await prisma.appUser.findUnique({ where: { id: appUserId }, select: { activeClientId: true } })
+        if (!user?.activeClientId) {
+          await prisma.appUser.update({ where: { id: appUserId }, data: { activeClientId: inv.clientId } })
+          setActiveClient = true
+        }
+      }
+    }
+
+    // Clear pending invitations from Clerk metadata
+    const clerk = clerkClient()
+    const { pendingInvitations: _, ...restMetadata } = publicMetadata as Record<string, unknown> & { pendingInvitations?: unknown }
+    await clerk.users.updateUser(clerkUserId, { publicMetadata: restMetadata })
+  } catch {
+    // Don't block login if invitation processing fails
+  }
+}
+
+/**
+ * Require the current user to be an org admin or super admin.
+ */
+export async function requireOrgAdmin(clientId: string) {
+  const appUser = await requireAppUser()
+  if (appUser.isSuperAdmin) return appUser
+
+  const membership = await prisma.clientUser.findUnique({
+    where: { userId_clientId: { userId: appUser.id, clientId } },
+    select: { role: true },
+  })
+
+  if (!membership || membership.role !== 'ADMIN') {
+    throw new Error('Admin access required')
+  }
   return appUser
 }
 

@@ -9,6 +9,9 @@ import {
   Plus,
   X,
   Layers,
+  Zap,
+  Calendar,
+  User,
 } from 'lucide-react'
 import { requireClientAuth } from '~/lib/auth.server'
 import { prisma } from '~/lib/prisma'
@@ -17,9 +20,12 @@ import { getProductIcon } from '~/lib/product-icons'
 import { createIdea } from '~/server/functions/ideas'
 import { addFeatureToProduct } from '~/server/functions/roadmap'
 import { createIssue } from '~/server/functions/issues'
+import { getMyActionItems } from '~/server/functions/actions'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Card, CardContent } from '~/components/ui/card'
+import { Badge } from '~/components/ui/badge'
+import { Avatar, AvatarImage, AvatarFallback } from '~/components/ui/avatar'
 import {
   Select,
   SelectTrigger,
@@ -151,7 +157,10 @@ const getDashboardData = createServerFn({ method: 'GET' }).handler(
 // ──────────────────────────────────────────────────────
 
 export const Route = createFileRoute('/_authed/$orgSlug/')({
-  loader: () => getDashboardData(),
+  loader: () =>
+    Promise.all([getDashboardData(), getMyActionItems()]).then(
+      ([dashboard, myActions]) => ({ ...dashboard, myActions }),
+    ),
   component: DashboardPage,
 })
 
@@ -159,8 +168,9 @@ export const Route = createFileRoute('/_authed/$orgSlug/')({
 // Types
 // ──────────────────────────────────────────────────────
 
-type DashboardData = Awaited<ReturnType<typeof getDashboardData>>
-type DashboardProduct = DashboardData['products'][number]
+type LoaderData = Awaited<ReturnType<typeof getDashboardData>> & { myActions: Awaited<ReturnType<typeof getMyActionItems>> }
+type DashboardProduct = LoaderData['products'][number]
+type MyAction = LoaderData['myActions'][number]
 
 type QuickAction = 'idea' | 'feature' | 'issue'
 type ActiveForm = { productId: string; type: QuickAction } | null
@@ -862,8 +872,20 @@ function EmptyState({ orgSlug }: { orgSlug: string }) {
 // Page
 // ──────────────────────────────────────────────────────
 
+const actionPriorityConfig: Record<string, { label: string; color: string }> = {
+  URGENT: { label: 'Urgent', color: 'bg-red-500/10 text-red-600 dark:text-red-400' },
+  HIGH: { label: 'High', color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400' },
+  MEDIUM: { label: 'Medium', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
+  LOW: { label: 'Low', color: 'bg-slate-500/10 text-slate-600 dark:text-slate-400' },
+}
+
+const actionStatusConfig: Record<string, { label: string; dotColor: string }> = {
+  NEW: { label: 'New', dotColor: 'bg-blue-500' },
+  IN_PROGRESS: { label: 'In Progress', dotColor: 'bg-amber-500' },
+}
+
 function DashboardPage() {
-  const { products, stats } = Route.useLoaderData()
+  const { products, stats, myActions } = Route.useLoaderData()
   const { orgSlug } = Route.useParams()
   const [activeForm, setActiveForm] = useState<ActiveForm>(null)
 
@@ -916,6 +938,85 @@ function DashboardPage() {
           />
         ))}
       </div>
+
+      {/* My Action Items */}
+      {myActions.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10">
+                <Zap className="h-4 w-4 text-cyan-500" />
+              </div>
+              <h3 className="font-heading font-semibold text-lg text-foreground">
+                My Actions
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  ({myActions.length} open)
+                </span>
+              </h3>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {myActions.map((action, i) => {
+              const pr = actionPriorityConfig[action.priority]
+              const st = actionStatusConfig[action.status]
+              const overdue = action.dueDate && new Date(action.dueDate) < new Date()
+              const IconComp = getProductIcon(action.product.icon)
+              return (
+                <Link
+                  key={action.id}
+                  to="/$orgSlug/products/$productId/actions"
+                  params={{ orgSlug, productId: action.product.id }}
+                  className="flex items-center gap-3 rounded-lg border border-border/50 px-4 py-3 transition-all duration-200 hover:border-primary/15 hover:bg-accent/30"
+                  style={{ animation: `dash-fade-in 0.3s ease-out ${i * 0.04}s both` }}
+                >
+                  {/* Product color dot */}
+                  <div
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white text-[10px] font-bold"
+                    style={{ backgroundColor: action.product.color }}
+                  >
+                    {IconComp ? <IconComp className="h-3.5 w-3.5" /> : action.product.name.charAt(0).toUpperCase()}
+                  </div>
+
+                  {/* Status dot + title */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', st?.dotColor)} />
+                      <span className="text-sm font-medium text-foreground truncate">{action.title}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground ml-3.5">{action.product.name}</span>
+                  </div>
+
+                  {/* Priority */}
+                  <Badge className={cn('text-[10px] shrink-0', pr?.color)}>
+                    {pr?.label}
+                  </Badge>
+
+                  {/* Due date */}
+                  {action.dueDate && (
+                    <span className={cn(
+                      'flex items-center gap-1 text-[10px] shrink-0',
+                      overdue ? 'text-destructive font-medium' : 'text-muted-foreground',
+                    )}>
+                      <Calendar className="h-3 w-3" />
+                      {new Date(action.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                  )}
+
+                  {/* Raised by */}
+                  {action.raisedBy && (
+                    <Avatar className="h-5 w-5 shrink-0">
+                      {action.raisedBy.avatarUrl && <AvatarImage src={action.raisedBy.avatarUrl} />}
+                      <AvatarFallback className="text-[7px]">
+                        {action.raisedBy.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Products section */}
       <div>

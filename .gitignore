@@ -36,5 +36,8 @@ Thumbs.db
 npm-debug.log*
 bun-debug.log*
 
+# Build instructions
+BUILD.md
+
 # Misc
 *.tsbuildinfo
