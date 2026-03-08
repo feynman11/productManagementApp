@@ -65,7 +65,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-export type ProductIconEntry = {
+type ProductIconEntry = {
   name: string
   label: string
   icon: LucideIcon

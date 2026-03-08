@@ -1,8 +1,8 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { prisma } from '~/lib/prisma'
-import { requireClientAuth } from '~/lib/auth.server'
-import { canWrite, canAdmin } from '~/lib/permissions'
+import { requireClientAuth, requireProductAuth } from '~/lib/auth.server'
+import { canWrite, canProductAdmin } from '~/lib/permissions'
 
 // ──────────────────────────────────────────────────────
 // Products — Server Functions
@@ -79,6 +79,14 @@ export const getProduct = createServerFn({ method: 'GET' })
     return { ...rest, releases, activeFeatureCount }
   })
 
+/** Returns the user's effective product role for UI permission checks */
+export const getProductRole = createServerFn({ method: 'GET' })
+  .inputValidator(z.object({ productId: z.string() }))
+  .handler(async ({ data }) => {
+    const { effectiveProductRole } = await requireProductAuth({ productId: data.productId })
+    return { productRole: effectiveProductRole }
+  })
+
 export const createProduct = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -94,11 +102,28 @@ export const createProduct = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
+    const { clientId, role, isDemo, userId } = await requireClientAuth()
     if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
-    return prisma.product.create({
-      data: { ...data, clientId },
+
+    // Create product and add the creator as OWNER in a transaction
+    const [product] = await prisma.$transaction([
+      prisma.product.create({
+        data: { ...data, clientId },
+      }),
+      // Deferred — we need the product id, so use a nested create instead
+    ].slice(0, 1) as [ReturnType<typeof prisma.product.create>])
+
+    // Add the creator as product OWNER
+    await prisma.productMember.create({
+      data: {
+        productId: product.id,
+        userId,
+        role: 'OWNER',
+        clientId,
+      },
     })
+
+    return product
   })
 
 export const updateProduct = createServerFn({ method: 'POST' })
@@ -118,13 +143,9 @@ export const updateProduct = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { effectiveProductRole } = await requireProductAuth({ productId: data.productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
     const { productId, ...updateData } = data
-    const existing = await prisma.product.findFirst({
-      where: { id: productId, clientId },
-    })
-    if (!existing) throw new Error('Product not found')
     return prisma.product.update({
       where: { id: productId },
       data: updateData,
@@ -134,13 +155,8 @@ export const updateProduct = createServerFn({ method: 'POST' })
 export const archiveProduct = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ productId: z.string() }))
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canAdmin(role, isDemo))
-      throw new Error('Admin permission required')
-    const existing = await prisma.product.findFirst({
-      where: { id: data.productId, clientId },
-    })
-    if (!existing) throw new Error('Product not found')
+    const { effectiveProductRole } = await requireProductAuth({ productId: data.productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
     return prisma.product.update({
       where: { id: data.productId },
       data: { status: 'ARCHIVED' },
@@ -159,8 +175,8 @@ export const searchOrgUsersNotInProduct = createServerFn({ method: 'GET' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { clientId, effectiveProductRole } = await requireProductAuth({ productId: data.productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
 
     // Get users already in the product
     const existingUserIds = (
@@ -195,18 +211,12 @@ export const addProductMember = createServerFn({ method: 'POST' })
     z.object({
       productId: z.string(),
       userId: z.string().min(1),
-      role: z.enum(['LEAD', 'MEMBER']).default('MEMBER'),
+      role: z.enum(['OWNER', 'MEMBER', 'VIEWER']).default('MEMBER'),
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
-
-    // Verify product belongs to this org
-    const product = await prisma.product.findFirst({
-      where: { id: data.productId, clientId },
-    })
-    if (!product) throw new Error('Product not found')
+    const { clientId, effectiveProductRole } = await requireProductAuth({ productId: data.productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
 
     // Verify user is a member of this org
     const orgMember = await prisma.clientUser.findUnique({
@@ -235,8 +245,8 @@ export const removeProductMember = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { clientId, effectiveProductRole } = await requireProductAuth({ productId: data.productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
 
     const member = await prisma.productMember.findFirst({
       where: { productId: data.productId, userId: data.userId, clientId },
@@ -251,12 +261,12 @@ export const updateProductMemberRole = createServerFn({ method: 'POST' })
     z.object({
       productId: z.string(),
       userId: z.string(),
-      role: z.enum(['LEAD', 'MEMBER']),
+      role: z.enum(['OWNER', 'MEMBER', 'VIEWER']),
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { clientId, effectiveProductRole } = await requireProductAuth({ productId: data.productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
 
     const member = await prisma.productMember.findFirst({
       where: { productId: data.productId, userId: data.userId, clientId },
@@ -267,23 +277,4 @@ export const updateProductMemberRole = createServerFn({ method: 'POST' })
       where: { id: member.id },
       data: { role: data.role },
     })
-  })
-
-export const getProductDashboard = createServerFn({ method: 'GET' })
-  .handler(async () => {
-    const { clientId } = await requireClientAuth()
-    const products = await prisma.product.findMany({
-      where: { clientId, status: 'ACTIVE' },
-      include: {
-        _count: {
-          select: {
-            ideas: true,
-            roadmaps: true,
-            issues: true,
-          },
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-    })
-    return products
   })

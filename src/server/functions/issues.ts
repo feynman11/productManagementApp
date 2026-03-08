@@ -1,8 +1,8 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { prisma } from '~/lib/prisma'
-import { requireClientAuth } from '~/lib/auth.server'
-import { canWrite, canAdmin } from '~/lib/permissions'
+import { requireClientAuth, requireProductAuth } from '~/lib/auth.server'
+import { canProductWrite } from '~/lib/permissions'
 import { createNotification } from '~/lib/notifications.server'
 
 // ──────────────────────────────────────────────────────
@@ -65,6 +65,7 @@ export const getIssue = createServerFn({ method: 'GET' })
     return issue
   })
 
+// MEMBER+ can create issues
 export const createIssue = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -77,14 +78,8 @@ export const createIssue = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo, userId } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
-
-    // Verify product belongs to client
-    const product = await prisma.product.findFirst({
-      where: { id: data.productId, clientId },
-    })
-    if (!product) throw new Error('Product not found')
+    const { clientId, userId, effectiveProductRole } = await requireProductAuth({ productId: data.productId })
+    if (!canProductWrite(effectiveProductRole)) throw new Error('Insufficient permissions')
 
     return prisma.issue.create({
       data: {
@@ -98,6 +93,7 @@ export const createIssue = createServerFn({ method: 'POST' })
     })
   })
 
+// MEMBER+ can update issues
 export const updateIssue = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -112,8 +108,7 @@ export const updateIssue = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { clientId } = await requireClientAuth()
 
     const { issueId, ...updateData } = data
 
@@ -123,50 +118,16 @@ export const updateIssue = createServerFn({ method: 'POST' })
     })
     if (!existing) throw new Error('Issue not found')
 
+    const { effectiveProductRole } = await requireProductAuth({ productId: existing.productId })
+    if (!canProductWrite(effectiveProductRole)) throw new Error('Insufficient permissions')
+
     return prisma.issue.update({
       where: { id: issueId },
       data: updateData,
     })
   })
 
-export const assignIssue = createServerFn({ method: 'POST' })
-  .inputValidator(
-    z.object({
-      issueId: z.string(),
-      assigneeId: z.string().nullable(),
-    }),
-  )
-  .handler(async ({ data }) => {
-    const { clientId, role, isDemo, userId } = await requireClientAuth()
-    if (!canAdmin(role, isDemo))
-      throw new Error('Admin permission required')
-
-    // Verify issue belongs to client
-    const existing = await prisma.issue.findFirst({
-      where: { id: data.issueId, clientId },
-    })
-    if (!existing) throw new Error('Issue not found')
-
-    const updated = await prisma.issue.update({
-      where: { id: data.issueId },
-      data: { assigneeId: data.assigneeId },
-    })
-
-    // Notify the new assignee
-    if (data.assigneeId && data.assigneeId !== userId) {
-      createNotification({
-        type: 'ISSUE_ASSIGNED',
-        title: 'Issue assigned to you',
-        message: `You were assigned to "${existing.title}"`,
-        recipientId: data.assigneeId,
-        clientId,
-        issueId: data.issueId,
-      }).catch(() => {})
-    }
-
-    return updated
-  })
-
+// MEMBER+ can comment on issues
 export const addIssueComment = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -175,14 +136,16 @@ export const addIssueComment = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo, userId } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { clientId, userId } = await requireClientAuth()
 
     // Verify issue belongs to client
     const issue = await prisma.issue.findFirst({
       where: { id: data.issueId, clientId },
     })
     if (!issue) throw new Error('Issue not found')
+
+    const { effectiveProductRole } = await requireProductAuth({ productId: issue.productId })
+    if (!canProductWrite(effectiveProductRole)) throw new Error('Insufficient permissions')
 
     const comment = await prisma.comment.create({
       data: {

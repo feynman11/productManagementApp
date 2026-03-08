@@ -1,8 +1,9 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { prisma } from '~/lib/prisma'
-import { requireClientAuth } from '~/lib/auth.server'
-import { canWrite, canAdmin } from '~/lib/permissions'
+import { requireClientAuth, requireProductAuth } from '~/lib/auth.server'
+import { canProductWrite, canProductAdmin } from '~/lib/permissions'
+import { createNotification } from '~/lib/notifications.server'
 
 // ──────────────────────────────────────────────────────
 // Roadmap — Server Functions
@@ -138,64 +139,7 @@ export const getRoadmap = createServerFn({ method: 'GET' })
     return roadmap
   })
 
-export const createRoadmap = createServerFn({ method: 'POST' })
-  .inputValidator(
-    z.object({
-      productId: z.string(),
-      name: z.string().min(1).max(100),
-      description: z.string().optional(),
-      isPublic: z.boolean().default(false),
-    }),
-  )
-  .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
-
-    // Verify product belongs to client
-    const product = await prisma.product.findFirst({
-      where: { id: data.productId, clientId },
-    })
-    if (!product) throw new Error('Product not found')
-
-    return prisma.roadmap.create({
-      data: {
-        name: data.name,
-        description: data.description,
-        isPublic: data.isPublic,
-        productId: data.productId,
-        clientId,
-      },
-    })
-  })
-
-export const updateRoadmap = createServerFn({ method: 'POST' })
-  .inputValidator(
-    z.object({
-      roadmapId: z.string(),
-      name: z.string().min(1).max(100).optional(),
-      description: z.string().optional(),
-      isPublic: z.boolean().optional(),
-    }),
-  )
-  .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
-
-    const { roadmapId, ...updateData } = data
-
-    // Verify roadmap belongs to client
-    const existing = await prisma.roadmap.findFirst({
-      where: { id: roadmapId, clientId },
-    })
-    if (!existing) throw new Error('Roadmap not found')
-
-    return prisma.roadmap.update({
-      where: { id: roadmapId },
-      data: updateData,
-    })
-  })
-
-// Convenience: add a feature to a product's single roadmap (auto-creates if needed)
+// MEMBER+ can add features
 export const addFeatureToProduct = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -206,8 +150,8 @@ export const addFeatureToProduct = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { clientId, effectiveProductRole } = await requireProductAuth({ productId: data.productId })
+    if (!canProductWrite(effectiveProductRole)) throw new Error('Insufficient permissions')
 
     const product = await prisma.product.findFirst({
       where: { id: data.productId, clientId },
@@ -240,6 +184,27 @@ export const addFeatureToProduct = createServerFn({ method: 'POST' })
     })
   })
 
+// Helper to resolve productId from a roadmapId
+async function getProductIdFromRoadmap(roadmapId: string, clientId: string) {
+  const roadmap = await prisma.roadmap.findFirst({
+    where: { id: roadmapId, clientId },
+    select: { productId: true },
+  })
+  if (!roadmap) throw new Error('Roadmap not found')
+  return roadmap.productId
+}
+
+// Helper to resolve productId from a roadmapItem
+async function getProductIdFromItem(itemId: string, clientId: string) {
+  const item = await prisma.roadmapItem.findFirst({
+    where: { id: itemId },
+    include: { roadmap: { select: { clientId: true, productId: true, id: true } } },
+  })
+  if (!item || item.roadmap.clientId !== clientId) throw new Error('Roadmap item not found')
+  return { productId: item.roadmap.productId, item, roadmapId: item.roadmap.id }
+}
+
+// MEMBER+ can create roadmap items
 export const createRoadmapItem = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -253,14 +218,10 @@ export const createRoadmapItem = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
-
-    // Verify roadmap belongs to client
-    const roadmap = await prisma.roadmap.findFirst({
-      where: { id: data.roadmapId, clientId },
-    })
-    if (!roadmap) throw new Error('Roadmap not found')
+    const { clientId } = await requireClientAuth()
+    const productId = await getProductIdFromRoadmap(data.roadmapId, clientId)
+    const { effectiveProductRole } = await requireProductAuth({ productId })
+    if (!canProductWrite(effectiveProductRole)) throw new Error('Insufficient permissions')
 
     // Verify release belongs to this roadmap if specified
     if (data.releaseId) {
@@ -304,6 +265,7 @@ export const createRoadmapItem = createServerFn({ method: 'POST' })
     })
   })
 
+// MEMBER+ can update roadmap items
 export const updateRoadmapItem = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -318,23 +280,17 @@ export const updateRoadmapItem = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { clientId } = await requireClientAuth()
+    const { productId, item, roadmapId } = await getProductIdFromItem(data.itemId, clientId)
+    const { effectiveProductRole } = await requireProductAuth({ productId })
+    if (!canProductWrite(effectiveProductRole)) throw new Error('Insufficient permissions')
 
     const { itemId, ...updateData } = data
-
-    // Verify item belongs to client via roadmap
-    const item = await prisma.roadmapItem.findFirst({
-      where: { id: itemId },
-      include: { roadmap: { select: { clientId: true, id: true } } },
-    })
-    if (!item || item.roadmap.clientId !== clientId)
-      throw new Error('Roadmap item not found')
 
     // Verify release belongs to the same roadmap if specified
     if (updateData.releaseId) {
       const release = await prisma.release.findFirst({
-        where: { id: updateData.releaseId, roadmapId: item.roadmap.id },
+        where: { id: updateData.releaseId, roadmapId },
       })
       if (!release) throw new Error('Release not found in this roadmap')
     }
@@ -356,7 +312,7 @@ export const updateRoadmapItem = createServerFn({ method: 'POST' })
 
       // Validate feature dates fall within release target date
       const release = await prisma.release.findFirst({
-        where: { id: effectiveReleaseId, roadmapId: item.roadmap.id },
+        where: { id: effectiveReleaseId, roadmapId },
       })
       if (release?.targetDate) {
         if (new Date(effectiveEndDate) > new Date(release.targetDate)) {
@@ -381,6 +337,7 @@ export const updateRoadmapItem = createServerFn({ method: 'POST' })
     })
   })
 
+// MEMBER+ can move roadmap items between statuses
 export const moveRoadmapItem = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -396,21 +353,15 @@ export const moveRoadmapItem = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
-
-    // Verify item belongs to client via roadmap
-    const item = await prisma.roadmapItem.findFirst({
-      where: { id: data.itemId },
-      include: { roadmap: { select: { clientId: true, id: true } } },
-    })
-    if (!item || item.roadmap.clientId !== clientId)
-      throw new Error('Roadmap item not found')
+    const { clientId } = await requireClientAuth()
+    const { productId, item, roadmapId } = await getProductIdFromItem(data.itemId, clientId)
+    const { effectiveProductRole } = await requireProductAuth({ productId })
+    if (!canProductWrite(effectiveProductRole)) throw new Error('Insufficient permissions')
 
     // Verify release belongs to the same roadmap if specified
     if (data.releaseId) {
       const release = await prisma.release.findFirst({
-        where: { id: data.releaseId, roadmapId: item.roadmap.id },
+        where: { id: data.releaseId, roadmapId },
       })
       if (!release) throw new Error('Release not found in this roadmap')
     }
@@ -427,7 +378,7 @@ export const moveRoadmapItem = createServerFn({ method: 'POST' })
 
       // Validate feature dates fall within release target date
       const release = await prisma.release.findFirst({
-        where: { id: effectiveReleaseId, roadmapId: item.roadmap.id },
+        where: { id: effectiveReleaseId, roadmapId },
       })
       if (release?.targetDate) {
         if (new Date(item.endDate) > new Date(release.targetDate)) {
@@ -456,6 +407,7 @@ export const moveRoadmapItem = createServerFn({ method: 'POST' })
     })
   })
 
+// OWNER only can create releases
 export const createRelease = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -466,15 +418,10 @@ export const createRelease = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canAdmin(role, isDemo))
-      throw new Error('Admin permission required')
-
-    // Verify roadmap belongs to client
-    const roadmap = await prisma.roadmap.findFirst({
-      where: { id: data.roadmapId, clientId },
-    })
-    if (!roadmap) throw new Error('Roadmap not found')
+    const { clientId } = await requireClientAuth()
+    const productId = await getProductIdFromRoadmap(data.roadmapId, clientId)
+    const { effectiveProductRole } = await requireProductAuth({ productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
 
     return prisma.release.create({
       data: {
@@ -486,35 +433,86 @@ export const createRelease = createServerFn({ method: 'POST' })
     })
   })
 
-export const updateRelease = createServerFn({ method: 'POST' })
+// Get a single feature with source idea info and phased comments
+export const getFeature = createServerFn({ method: 'GET' })
+  .inputValidator(z.object({ featureId: z.string() }))
+  .handler(async ({ data }) => {
+    const { clientId } = await requireClientAuth()
+    const item = await prisma.roadmapItem.findFirst({
+      where: { id: data.featureId },
+      include: {
+        roadmap: { select: { clientId: true, productId: true, name: true } },
+        release: { select: { id: true, name: true } },
+        sourceIdea: {
+          include: {
+            author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+            comments: {
+              include: {
+                author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+            tags: true,
+          },
+        },
+        comments: {
+          include: {
+            author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    })
+    if (!item || item.roadmap.clientId !== clientId)
+      throw new Error('Feature not found')
+    return item
+  })
+
+// MEMBER+ can comment on features
+export const addFeatureComment = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
-      releaseId: z.string(),
-      name: z.string().min(1).max(100).optional(),
-      description: z.string().optional(),
-      targetDate: z.coerce.date().optional(),
-      status: z
-        .enum(['PLANNED', 'IN_PROGRESS', 'RELEASED', 'CANCELLED'])
-        .optional(),
+      featureId: z.string(),
+      content: z.string().min(1),
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canAdmin(role, isDemo))
-      throw new Error('Admin permission required')
+    const { clientId, userId } = await requireClientAuth()
 
-    const { releaseId, ...updateData } = data
-
-    // Verify release belongs to client via roadmap
-    const release = await prisma.release.findFirst({
-      where: { id: releaseId },
-      include: { roadmap: { select: { clientId: true } } },
+    const item = await prisma.roadmapItem.findFirst({
+      where: { id: data.featureId },
+      include: {
+        roadmap: { select: { clientId: true, productId: true } },
+        sourceIdea: { select: { authorId: true, title: true } },
+      },
     })
-    if (!release || release.roadmap.clientId !== clientId)
-      throw new Error('Release not found')
+    if (!item || item.roadmap.clientId !== clientId)
+      throw new Error('Feature not found')
 
-    return prisma.release.update({
-      where: { id: releaseId },
-      data: updateData,
+    const { effectiveProductRole } = await requireProductAuth({ productId: item.roadmap.productId })
+    if (!canProductWrite(effectiveProductRole)) throw new Error('Insufficient permissions')
+
+    const comment = await prisma.comment.create({
+      data: {
+        content: data.content,
+        authorId: userId,
+        roadmapItemId: data.featureId,
+      },
+      include: {
+        author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      },
     })
+
+    // Notify original idea author if this feature came from an idea
+    if (item.sourceIdea && item.sourceIdea.authorId !== userId) {
+      createNotification({
+        type: 'IDEA_COMMENTED',
+        title: 'New comment on feature from your idea',
+        message: `Someone commented on the feature "${item.title}"`,
+        recipientId: item.sourceIdea.authorId,
+        clientId,
+      }).catch(() => {})
+    }
+
+    return comment
   })

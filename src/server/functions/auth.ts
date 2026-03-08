@@ -4,15 +4,6 @@ import { prisma } from '~/lib/prisma'
 import { requireAppUser } from '~/lib/auth.server'
 
 /**
- * Fetch basic Clerk auth state for the root route.
- */
-export const fetchClerkAuth = createServerFn({ method: 'GET' })
-  .handler(async () => {
-    const { userId } = await auth()
-    return { userId }
-  })
-
-/**
  * Get the demo org slug (if one exists). Does not require authentication.
  */
 export const getDemoOrgSlug = createServerFn({ method: 'GET' })

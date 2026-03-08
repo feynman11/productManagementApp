@@ -248,38 +248,3 @@ export const updateUserOrgRole = createServerFn({ method: 'POST' })
 // ──────────────────────────────────────────────────────
 // Super Admin — User Management
 // ──────────────────────────────────────────────────────
-
-export const getAppUsers = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({
-    page: z.number().int().positive().default(1),
-    limit: z.number().int().positive().max(100).default(20),
-  }))
-  .handler(async ({ data }) => {
-    await requireSuperAdmin()
-    const { page, limit } = data
-    const [users, total] = await Promise.all([
-      prisma.appUser.findMany({
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          _count: { select: { memberships: true } },
-        },
-      }),
-      prisma.appUser.count(),
-    ])
-    return { users, total, page, limit }
-  })
-
-export const toggleSuperAdmin = createServerFn({ method: 'POST' })
-  .inputValidator(z.object({
-    userId: z.string(),
-    isSuperAdmin: z.boolean(),
-  }))
-  .handler(async ({ data }) => {
-    await requireSuperAdmin()
-    return prisma.appUser.update({
-      where: { id: data.userId },
-      data: { isSuperAdmin: data.isSuperAdmin },
-    })
-  })

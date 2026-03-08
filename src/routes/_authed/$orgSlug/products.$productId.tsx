@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import {
   getProduct,
+  getProductRole,
   updateProduct,
   archiveProduct,
   searchOrgUsersNotInProduct,
@@ -36,7 +37,8 @@ import {
 import { StatusBadge } from '~/components/common/status-badge'
 import { IconPicker } from '~/components/common/icon-picker'
 import { getProductIcon } from '~/lib/product-icons'
-import { canWrite, canAdmin } from '~/lib/permissions'
+import { canProductAdmin, canProductWrite, canProductContribute } from '~/lib/permissions'
+import type { EffectiveProductRole } from '~/lib/permissions'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -66,6 +68,10 @@ import {
 } from '~/components/ui/select'
 
 export const Route = createFileRoute('/_authed/$orgSlug/products/$productId')({
+  beforeLoad: async ({ params }) => {
+    const { productRole } = await getProductRole({ data: { productId: params.productId } })
+    return { productRole }
+  },
   loader: ({ params }) => getProduct({ data: { productId: params.productId } }),
   component: ProductDetailPage,
 })
@@ -389,11 +395,11 @@ function ReleaseTimeline({
 function ProductDetailPage() {
   const product = Route.useLoaderData()
   const { orgSlug, productId } = Route.useParams()
-  const { role, isDemo } = Route.useRouteContext() as { role?: string; isDemo?: boolean }
+  const { productRole } = Route.useRouteContext() as { productRole?: EffectiveProductRole }
   const navigate = useNavigate()
 
-  const userCanWrite = canWrite(role as any, isDemo)
-  const userCanAdmin = canAdmin(role as any, isDemo)
+  const userCanWrite = canProductWrite(productRole ?? null)
+  const userCanAdmin = canProductAdmin(productRole ?? null)
 
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -414,7 +420,7 @@ function ProductDetailPage() {
   const [memberSearchQuery, setMemberSearchQuery] = useState('')
   const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; name: string | null; email: string | null; avatarUrl: string | null }>>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
-  const [newMemberRole, setNewMemberRole] = useState<'LEAD' | 'MEMBER'>('MEMBER')
+  const [newMemberRole, setNewMemberRole] = useState<'OWNER' | 'MEMBER' | 'VIEWER'>('MEMBER')
   const [addingMember, setAddingMember] = useState(false)
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -475,7 +481,7 @@ function ProductDetailPage() {
     } catch { /* */ }
   }
 
-  async function handleMemberRoleChange(userId: string, role: 'LEAD' | 'MEMBER') {
+  async function handleMemberRoleChange(userId: string, role: 'OWNER' | 'MEMBER' | 'VIEWER') {
     try {
       await updateProductMemberRole({ data: { productId, userId, role } })
       reload()
@@ -844,8 +850,9 @@ function ProductDetailPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="LEAD">Lead</SelectItem>
+                              <SelectItem value="OWNER">Owner</SelectItem>
                               <SelectItem value="MEMBER">Member</SelectItem>
+                              <SelectItem value="VIEWER">Viewer</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -882,14 +889,15 @@ function ProductDetailPage() {
                           <div className="flex items-center gap-2">
                             <Select
                               value={member.role}
-                              onValueChange={(v) => handleMemberRoleChange(member.userId, v as 'LEAD' | 'MEMBER')}
+                              onValueChange={(v) => handleMemberRoleChange(member.userId, v as 'OWNER' | 'MEMBER' | 'VIEWER')}
                             >
-                              <SelectTrigger className="h-7 text-xs w-[90px]">
+                              <SelectTrigger className="h-7 text-xs w-[100px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="LEAD">Lead</SelectItem>
+                                <SelectItem value="OWNER">Owner</SelectItem>
                                 <SelectItem value="MEMBER">Member</SelectItem>
+                                <SelectItem value="VIEWER">Viewer</SelectItem>
                               </SelectContent>
                             </Select>
                             <Button
@@ -1028,9 +1036,11 @@ function ProductDetailPage() {
                           <span
                             className={cn(
                               'badge',
-                              member.role === 'LEAD'
+                              member.role === 'OWNER'
                                 ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
-                                : 'bg-muted text-muted-foreground',
+                                : member.role === 'MEMBER'
+                                  ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                                  : 'bg-muted text-muted-foreground',
                             )}
                           >
                             {member.role}

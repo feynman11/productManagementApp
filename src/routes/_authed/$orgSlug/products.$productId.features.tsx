@@ -10,7 +10,8 @@ import {
   Check,
 } from 'lucide-react'
 import { getProductFeatures, getProductReleases, updateRoadmapItem, moveRoadmapItem } from '~/server/functions/roadmap'
-import { canWrite } from '~/lib/permissions'
+import { canProductWrite } from '~/lib/permissions'
+import type { EffectiveProductRole } from '~/lib/permissions'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -278,12 +279,12 @@ function FeatureDetailPanel({
             Release{needsScheduling && ' *'}
           </label>
           {userCanWrite ? (
-            <Select value={releaseId} onValueChange={setReleaseId}>
+            <Select value={releaseId || 'none'} onValueChange={(v) => setReleaseId(v === 'none' ? '' : v)}>
               <SelectTrigger className="h-9 w-full text-sm">
                 <SelectValue placeholder="No release" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No release</SelectItem>
+                <SelectItem value="none">No release</SelectItem>
                 {releases.map((r) => (
                   <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                 ))}
@@ -370,8 +371,8 @@ function FeatureDetailPanel({
 function FeaturesPage() {
   const { features, releases } = Route.useLoaderData()
   const router = useRouter()
-  const { role, isDemo } = Route.useRouteContext() as { role?: string; isDemo?: boolean }
-  const userCanWrite = canWrite(role as any, isDemo)
+  const { productRole } = Route.useRouteContext() as { productRole?: EffectiveProductRole }
+  const userCanWrite = canProductWrite(productRole ?? null)
 
   const [showCompleted, setShowCompleted] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)

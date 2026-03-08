@@ -12,7 +12,8 @@ import { getIssue, updateIssue, addIssueComment } from '~/server/functions/issue
 import { StatusBadge } from '~/components/common/status-badge'
 import { SeverityBadge } from '~/components/common/severity-badge'
 import { CommentThread } from '~/components/common/comment-thread'
-import { canWrite, canAdmin } from '~/lib/permissions'
+import { canProductWrite, canProductAdmin } from '~/lib/permissions'
+import type { EffectiveProductRole } from '~/lib/permissions'
 import { Button } from '~/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
 import { Avatar, AvatarImage, AvatarFallback } from '~/components/ui/avatar'
@@ -53,11 +54,11 @@ const ISSUE_SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const
 function IssueDetailPage() {
   const issue = Route.useLoaderData()
   const { orgSlug, productId, issueId } = Route.useParams()
-  const { role, isDemo } = Route.useRouteContext() as { role?: string; isDemo?: boolean }
+  const { productRole } = Route.useRouteContext() as { productRole?: EffectiveProductRole }
   const navigate = useNavigate()
 
-  const userCanWrite = canWrite(role as any, isDemo)
-  const userCanAdmin = canAdmin(role as any, isDemo)
+  const userCanWrite = canProductWrite(productRole ?? null)
+  const userCanAdmin = canProductAdmin(productRole ?? null)
 
   const [changingStatus, setChangingStatus] = useState(false)
   const [changingSeverity, setChangingSeverity] = useState(false)

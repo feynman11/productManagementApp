@@ -16,7 +16,8 @@ import {
   createRelease,
   updateRoadmapItem,
 } from '~/server/functions/roadmap'
-import { canWrite, canAdmin } from '~/lib/permissions'
+import { canProductWrite, canProductAdmin } from '~/lib/permissions'
+import type { EffectiveProductRole } from '~/lib/permissions'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -631,10 +632,10 @@ function RoadmapPage() {
   const roadmap = Route.useLoaderData()
   const { orgSlug, productId } = Route.useParams()
   const router = useRouter()
-  const { role, isDemo } = Route.useRouteContext() as { role?: string; isDemo?: boolean }
+  const { productRole } = Route.useRouteContext() as { productRole?: EffectiveProductRole }
 
-  const userCanWrite = canWrite(role as any, isDemo)
-  const userCanAdmin = canAdmin(role as any, isDemo)
+  const userCanWrite = canProductWrite(productRole ?? null)
+  const userCanAdmin = canProductAdmin(productRole ?? null)
 
   const now = new Date()
   const [viewStart, setViewStart] = useState(() => addM(mStart(now), -1))

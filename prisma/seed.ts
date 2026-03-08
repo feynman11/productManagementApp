@@ -228,12 +228,12 @@ async function main() {
   // ── Demo Product Members ──
   await prisma.productMember.createMany({
     data: [
-      { productId: demoTaskFlow.id, userId: superAdminUser.id, role: 'LEAD', clientId: demo.id },
+      { productId: demoTaskFlow.id, userId: superAdminUser.id, role: 'OWNER', clientId: demo.id },
       { productId: demoTaskFlow.id, userId: acmeAdminUser.id, role: 'MEMBER', clientId: demo.id },
-      { productId: demoInsightHub.id, userId: acmeContribUser.id, role: 'LEAD', clientId: demo.id },
+      { productId: demoInsightHub.id, userId: acmeContribUser.id, role: 'OWNER', clientId: demo.id },
       { productId: demoInsightHub.id, userId: superAdminUser.id, role: 'MEMBER', clientId: demo.id },
-      { productId: demoDevPortal.id, userId: tsAdminUser.id, role: 'LEAD', clientId: demo.id },
-      { productId: demoMobileSDK.id, userId: tsContribUser.id, role: 'LEAD', clientId: demo.id },
+      { productId: demoDevPortal.id, userId: tsAdminUser.id, role: 'OWNER', clientId: demo.id },
+      { productId: demoMobileSDK.id, userId: tsContribUser.id, role: 'OWNER', clientId: demo.id },
     ],
   })
 
@@ -655,10 +655,10 @@ async function main() {
   // Acme Product Members
   await prisma.productMember.createMany({
     data: [
-      { productId: acmeWebApp.id, userId: acmeAdminUser.id, role: 'LEAD', clientId: acme.id },
+      { productId: acmeWebApp.id, userId: acmeAdminUser.id, role: 'OWNER', clientId: acme.id },
       { productId: acmeWebApp.id, userId: acmeContribUser.id, role: 'MEMBER', clientId: acme.id },
-      { productId: acmeMobileApp.id, userId: acmeContribUser.id, role: 'LEAD', clientId: acme.id },
-      { productId: acmeAPI.id, userId: acmeAdminUser.id, role: 'LEAD', clientId: acme.id },
+      { productId: acmeMobileApp.id, userId: acmeContribUser.id, role: 'OWNER', clientId: acme.id },
+      { productId: acmeAPI.id, userId: acmeAdminUser.id, role: 'OWNER', clientId: acme.id },
     ],
   })
 
@@ -798,9 +798,9 @@ async function main() {
 
   await prisma.productMember.createMany({
     data: [
-      { productId: tsAnalytics.id, userId: tsAdminUser.id, role: 'LEAD', clientId: techstart.id },
+      { productId: tsAnalytics.id, userId: tsAdminUser.id, role: 'OWNER', clientId: techstart.id },
       { productId: tsAnalytics.id, userId: tsContribUser.id, role: 'MEMBER', clientId: techstart.id },
-      { productId: tsOnboardingSuite.id, userId: tsContribUser.id, role: 'LEAD', clientId: techstart.id },
+      { productId: tsOnboardingSuite.id, userId: tsContribUser.id, role: 'OWNER', clientId: techstart.id },
     ],
   })
 

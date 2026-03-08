@@ -24,20 +24,3 @@ export async function createNotification(input: CreateNotificationInput) {
     },
   })
 }
-
-export async function notifyMany(
-  inputs: CreateNotificationInput[],
-) {
-  if (inputs.length === 0) return
-  return prisma.notification.createMany({
-    data: inputs.map((input) => ({
-      type: input.type,
-      title: input.title,
-      message: input.message,
-      recipientId: input.recipientId,
-      clientId: input.clientId,
-      ideaId: input.ideaId,
-      issueId: input.issueId,
-    })),
-  })
-}

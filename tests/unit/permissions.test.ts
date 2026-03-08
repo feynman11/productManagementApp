@@ -1,33 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { hasPermission, canWrite, canAdmin } from '~/lib/permissions'
+import {
+  canWrite,
+  canAdmin,
+  resolveProductRole,
+  canProductAdmin,
+  canProductWrite,
+  canProductContribute,
+} from '~/lib/permissions'
 
-describe('Permission System', () => {
-  describe('hasPermission', () => {
-    it('ADMIN should have all permissions', () => {
-      expect(hasPermission('ADMIN', 'ADMIN')).toBe(true)
-      expect(hasPermission('ADMIN', 'CONTRIBUTOR')).toBe(true)
-      expect(hasPermission('ADMIN', 'VIEWER')).toBe(true)
-    })
-
-    it('CONTRIBUTOR should not have admin permissions', () => {
-      expect(hasPermission('CONTRIBUTOR', 'ADMIN')).toBe(false)
-      expect(hasPermission('CONTRIBUTOR', 'CONTRIBUTOR')).toBe(true)
-      expect(hasPermission('CONTRIBUTOR', 'VIEWER')).toBe(true)
-    })
-
-    it('VIEWER should only have viewer permissions', () => {
-      expect(hasPermission('VIEWER', 'ADMIN')).toBe(false)
-      expect(hasPermission('VIEWER', 'CONTRIBUTOR')).toBe(false)
-      expect(hasPermission('VIEWER', 'VIEWER')).toBe(true)
-    })
-
-    it('undefined role should have no permissions', () => {
-      expect(hasPermission(undefined, 'ADMIN')).toBe(false)
-      expect(hasPermission(undefined, 'CONTRIBUTOR')).toBe(false)
-      expect(hasPermission(undefined, 'VIEWER')).toBe(false)
-    })
-  })
-
+describe('Org-Level Permissions', () => {
   describe('canWrite', () => {
     it('should return true for ADMIN', () => {
       expect(canWrite('ADMIN')).toBe(true)
@@ -70,6 +51,89 @@ describe('Permission System', () => {
 
     it('should return false for demo org regardless of role', () => {
       expect(canAdmin('ADMIN', true)).toBe(false)
+    })
+  })
+})
+
+describe('Product-Level Permissions', () => {
+  describe('resolveProductRole', () => {
+    it('super admin always gets OWNER', () => {
+      expect(resolveProductRole({ orgRole: 'VIEWER', productRole: null, isSuperAdmin: true })).toBe('OWNER')
+      expect(resolveProductRole({ orgRole: 'VIEWER', productRole: 'VIEWER', isSuperAdmin: true })).toBe('OWNER')
+    })
+
+    it('org ADMIN always gets OWNER', () => {
+      expect(resolveProductRole({ orgRole: 'ADMIN', productRole: null })).toBe('OWNER')
+      expect(resolveProductRole({ orgRole: 'ADMIN', productRole: 'VIEWER' })).toBe('OWNER')
+    })
+
+    it('demo org always gets VIEWER', () => {
+      expect(resolveProductRole({ orgRole: 'ADMIN', productRole: 'OWNER', isDemo: true })).toBe('VIEWER')
+    })
+
+    it('uses explicit product role when set', () => {
+      expect(resolveProductRole({ orgRole: 'CONTRIBUTOR', productRole: 'OWNER' })).toBe('OWNER')
+      expect(resolveProductRole({ orgRole: 'CONTRIBUTOR', productRole: 'MEMBER' })).toBe('MEMBER')
+      expect(resolveProductRole({ orgRole: 'CONTRIBUTOR', productRole: 'VIEWER' })).toBe('VIEWER')
+    })
+
+    it('org member with no product role gets VIEWER', () => {
+      expect(resolveProductRole({ orgRole: 'CONTRIBUTOR', productRole: null })).toBe('VIEWER')
+      expect(resolveProductRole({ orgRole: 'VIEWER', productRole: null })).toBe('VIEWER')
+    })
+  })
+
+  describe('canProductAdmin', () => {
+    it('OWNER can admin', () => {
+      expect(canProductAdmin('OWNER')).toBe(true)
+    })
+
+    it('MEMBER cannot admin', () => {
+      expect(canProductAdmin('MEMBER')).toBe(false)
+    })
+
+    it('VIEWER cannot admin', () => {
+      expect(canProductAdmin('VIEWER')).toBe(false)
+    })
+
+    it('null cannot admin', () => {
+      expect(canProductAdmin(null)).toBe(false)
+    })
+  })
+
+  describe('canProductWrite', () => {
+    it('OWNER can write', () => {
+      expect(canProductWrite('OWNER')).toBe(true)
+    })
+
+    it('MEMBER can write', () => {
+      expect(canProductWrite('MEMBER')).toBe(true)
+    })
+
+    it('VIEWER cannot write', () => {
+      expect(canProductWrite('VIEWER')).toBe(false)
+    })
+
+    it('null cannot write', () => {
+      expect(canProductWrite(null)).toBe(false)
+    })
+  })
+
+  describe('canProductContribute', () => {
+    it('OWNER can contribute', () => {
+      expect(canProductContribute('OWNER')).toBe(true)
+    })
+
+    it('MEMBER can contribute', () => {
+      expect(canProductContribute('MEMBER')).toBe(true)
+    })
+
+    it('VIEWER can contribute', () => {
+      expect(canProductContribute('VIEWER')).toBe(true)
+    })
+
+    it('null cannot contribute', () => {
+      expect(canProductContribute(null)).toBe(false)
     })
   })
 })

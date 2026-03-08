@@ -15,7 +15,8 @@ import { getIdeas, createIdea } from '~/server/functions/ideas'
 import { exportIdeasCsv } from '~/server/functions/export'
 import { downloadFile } from '~/lib/download'
 import { StatusBadge } from '~/components/common/status-badge'
-import { canWrite } from '~/lib/permissions'
+import { canProductContribute } from '~/lib/permissions'
+import type { EffectiveProductRole } from '~/lib/permissions'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
@@ -61,10 +62,10 @@ function formatDate(dateStr: string | Date) {
 function IdeasPage() {
   const ideas = Route.useLoaderData()
   const { orgSlug, productId } = Route.useParams()
-  const { role, isDemo } = Route.useRouteContext() as { role?: string; isDemo?: boolean }
+  const { productRole } = Route.useRouteContext() as { productRole?: EffectiveProductRole }
   const navigate = useNavigate()
 
-  const userCanWrite = canWrite(role as any, isDemo)
+  const userCanWrite = canProductContribute(productRole ?? null)
 
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [sortBy, setSortBy] = useState<string>('createdAt')
@@ -255,7 +256,7 @@ function IdeasPage() {
               <SelectItem value="ALL">All Statuses</SelectItem>
               <SelectItem value="SUBMITTED">Submitted</SelectItem>
               <SelectItem value="UNDER_REVIEW">Under Review</SelectItem>
-              <SelectItem value="PLANNED">Planned</SelectItem>
+              <SelectItem value="CONVERTED">Converted to Feature</SelectItem>
               <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
               <SelectItem value="COMPLETED">Completed</SelectItem>
               <SelectItem value="REJECTED">Rejected</SelectItem>
@@ -307,8 +308,12 @@ function IdeasPage() {
             {filteredIdeas.map((idea) => (
               <Link
                 key={idea.id}
-                to="/$orgSlug/products/$productId/ideas/$ideaId"
-                params={{ orgSlug, productId, ideaId: idea.id }}
+                to={idea.status === 'CONVERTED' && idea.convertedToItem
+                  ? '/$orgSlug/products/$productId/features/$featureId'
+                  : '/$orgSlug/products/$productId/ideas/$ideaId'}
+                params={idea.status === 'CONVERTED' && idea.convertedToItem
+                  ? { orgSlug, productId, featureId: idea.convertedToItem.id }
+                  : { orgSlug, productId, ideaId: idea.id }}
                 className="block"
               >
                 <Card className="transition-colors hover:bg-muted/30">
@@ -365,12 +370,19 @@ function IdeasPage() {
                   <TableRow
                     key={idea.id}
                     className="cursor-pointer"
-                    onClick={() =>
-                      navigate({
-                        to: '/$orgSlug/products/$productId/ideas/$ideaId',
-                        params: { orgSlug, productId, ideaId: idea.id },
-                      })
-                    }
+                    onClick={() => {
+                      if (idea.status === 'CONVERTED' && idea.convertedToItem) {
+                        navigate({
+                          to: '/$orgSlug/products/$productId/features/$featureId',
+                          params: { orgSlug, productId, featureId: idea.convertedToItem.id },
+                        })
+                      } else {
+                        navigate({
+                          to: '/$orgSlug/products/$productId/ideas/$ideaId',
+                          params: { orgSlug, productId, ideaId: idea.id },
+                        })
+                      }
+                    }}
                   >
                     <TableCell>
                       <div>

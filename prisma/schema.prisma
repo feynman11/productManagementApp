@@ -46,14 +46,15 @@ enum ProductStatus {
 }
 
 enum ProductMemberRole {
-  LEAD
+  OWNER
   MEMBER
+  VIEWER
 }
 
 enum IdeaStatus {
   SUBMITTED
   UNDER_REVIEW
-  PLANNED
+  CONVERTED
   IN_PROGRESS
   COMPLETED
   REJECTED
@@ -250,6 +251,10 @@ model Idea {
 
   votes Int @default(0)
 
+  // Link to the feature this idea was converted into
+  convertedToItem   RoadmapItem? @relation("IdeaToFeature", fields: [convertedToItemId], references: [id])
+  convertedToItemId String?      @unique
+
   comments Comment[]
   tags     Tag[]
 
@@ -303,6 +308,11 @@ model RoadmapItem {
 
   release   Release? @relation(fields: [releaseId], references: [id])
   releaseId String?
+
+  // Link back to the source idea (if converted from one)
+  sourceIdea Idea? @relation("IdeaToFeature")
+
+  comments Comment[]
 
   startDate DateTime?
   endDate   DateTime?
@@ -401,11 +411,15 @@ model Comment {
   issue   Issue?  @relation(fields: [issueId], references: [id], onDelete: Cascade)
   issueId String?
 
+  roadmapItem   RoadmapItem? @relation(fields: [roadmapItemId], references: [id], onDelete: Cascade)
+  roadmapItemId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([ideaId])
   @@index([issueId])
+  @@index([roadmapItemId])
   @@index([authorId])
 }
 

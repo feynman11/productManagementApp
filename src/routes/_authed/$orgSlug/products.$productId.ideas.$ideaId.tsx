@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import {
   ArrowLeft,
@@ -12,14 +12,15 @@ import {
   updateIdeaStatus,
   voteIdea,
   addIdeaComment,
-  promoteToRoadmap,
+  convertToFeature,
 } from '~/server/functions/ideas'
-import { getRoadmaps } from '~/server/functions/roadmap'
+import { Input } from '~/components/ui/input'
 import { StatusBadge } from '~/components/common/status-badge'
 import { CommentThread } from '~/components/common/comment-thread'
 import { RiceScoreCard } from '~/components/ideas/rice-score-card'
 import { IdeaVoteButton } from '~/components/ideas/idea-vote-button'
-import { canWrite, canAdmin } from '~/lib/permissions'
+import { canProductContribute, canProductWrite, canProductAdmin } from '~/lib/permissions'
+import type { EffectiveProductRole } from '~/lib/permissions'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
@@ -36,11 +37,19 @@ export const Route = createFileRoute(
   '/_authed/$orgSlug/products/$productId/ideas/$ideaId',
 )({
   loader: async ({ params }) => {
-    const [idea, roadmaps] = await Promise.all([
-      getIdea({ data: { ideaId: params.ideaId } }),
-      getRoadmaps({ data: { productId: params.productId } }),
-    ])
-    return { idea, roadmaps }
+    const idea = await getIdea({ data: { ideaId: params.ideaId } })
+    // Redirect converted ideas to the feature detail page
+    if (idea.status === 'CONVERTED' && idea.convertedToItem) {
+      throw redirect({
+        to: '/$orgSlug/products/$productId/features/$featureId',
+        params: {
+          orgSlug: params.orgSlug,
+          productId: params.productId,
+          featureId: idea.convertedToItem.id,
+        },
+      })
+    }
+    return { idea }
   },
   component: IdeaDetailPage,
 })
@@ -56,7 +65,6 @@ function formatDate(dateStr: string | Date) {
 const IDEA_STATUSES = [
   'SUBMITTED',
   'UNDER_REVIEW',
-  'PLANNED',
   'IN_PROGRESS',
   'COMPLETED',
   'REJECTED',
@@ -64,20 +72,19 @@ const IDEA_STATUSES = [
 ] as const
 
 function IdeaDetailPage() {
-  const { idea, roadmaps } = Route.useLoaderData()
+  const { idea } = Route.useLoaderData()
   const { orgSlug, productId, ideaId } = Route.useParams()
-  const { role, isDemo } = Route.useRouteContext() as { role?: string; isDemo?: boolean }
+  const { productRole } = Route.useRouteContext() as { productRole?: EffectiveProductRole }
   const navigate = useNavigate()
 
-  const userCanWrite = canWrite(role as any, isDemo)
-  const userCanAdmin = canAdmin(role as any, isDemo)
+  const userCanContribute = canProductContribute(productRole ?? null)
+  const userCanWrite = canProductWrite(productRole ?? null)
+  const userCanAdmin = canProductAdmin(productRole ?? null)
 
   const [changingStatus, setChangingStatus] = useState(false)
   const [promoting, setPromoting] = useState(false)
-  const [selectedRoadmapId, setSelectedRoadmapId] = useState(
-    roadmaps[0]?.id ?? '',
-  )
   const [showPromote, setShowPromote] = useState(false)
+  const [featureName, setFeatureName] = useState(idea.title)
 
   async function handleStatusChange(newStatus: string) {
     setChangingStatus(true)
@@ -121,16 +128,15 @@ function IdeaDetailPage() {
     })
   }
 
-  async function handlePromote() {
-    if (!selectedRoadmapId) return
+  async function handleConvert() {
     setPromoting(true)
     try {
-      await promoteToRoadmap({
-        data: { ideaId, roadmapId: selectedRoadmapId },
+      const feature = await convertToFeature({
+        data: { ideaId, featureName: featureName.trim() || undefined },
       })
       navigate({
-        to: '/$orgSlug/products/$productId/ideas/$ideaId',
-        params: { orgSlug, productId, ideaId },
+        to: '/$orgSlug/products/$productId/features/$featureId',
+        params: { orgSlug, productId, featureId: feature.id },
       })
     } finally {
       setPromoting(false)
@@ -190,7 +196,7 @@ function IdeaDetailPage() {
           <IdeaVoteButton
             votes={idea.votes}
             onVote={handleVote}
-            canVote={userCanWrite}
+            canVote={userCanContribute}
           />
         </div>
       </div>
@@ -235,7 +241,7 @@ function IdeaDetailPage() {
               <CommentThread
                 comments={idea.comments}
                 onAddComment={handleAddComment}
-                canComment={userCanWrite}
+                canComment={userCanContribute}
               />
             </CardContent>
           </Card>
@@ -288,8 +294,7 @@ function IdeaDetailPage() {
 
           {/* Promote to Roadmap */}
           {userCanAdmin &&
-            roadmaps.length > 0 &&
-            idea.status !== 'PLANNED' &&
+            idea.status !== 'CONVERTED' &&
             idea.status !== 'COMPLETED' && (
               <Card>
                 <CardHeader>
@@ -297,35 +302,30 @@ function IdeaDetailPage() {
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
                       <ArrowRightCircle className="h-4 w-4 text-emerald-500" />
                     </div>
-                    Promote to Roadmap
+                    Convert to Feature
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {showPromote ? (
                     <div className="space-y-3">
-                      <Select
-                        value={selectedRoadmapId}
-                        onValueChange={setSelectedRoadmapId}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {roadmaps.map((rm: any) => (
-                            <SelectItem key={rm.id} value={rm.id}>
-                              {rm.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Feature Name
+                        </label>
+                        <Input
+                          value={featureName}
+                          onChange={(e) => setFeatureName(e.target.value)}
+                          placeholder="Feature name"
+                        />
+                      </div>
                       <div className="flex gap-2">
                         <Button
                           size="sm"
-                          onClick={handlePromote}
-                          disabled={promoting || !selectedRoadmapId}
+                          onClick={handleConvert}
+                          disabled={promoting || !featureName.trim()}
                           className="flex-1"
                         >
-                          {promoting ? 'Promoting...' : 'Confirm'}
+                          {promoting ? 'Converting...' : 'Confirm'}
                         </Button>
                         <Button
                           variant="secondary"
@@ -343,7 +343,7 @@ function IdeaDetailPage() {
                       onClick={() => setShowPromote(true)}
                     >
                       <ArrowRightCircle className="h-4 w-4" />
-                      Promote to Roadmap
+                      Convert to Feature
                     </Button>
                   )}
                 </CardContent>

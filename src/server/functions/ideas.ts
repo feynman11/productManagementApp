@@ -1,8 +1,8 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { prisma } from '~/lib/prisma'
-import { requireClientAuth } from '~/lib/auth.server'
-import { canWrite, canAdmin } from '~/lib/permissions'
+import { requireClientAuth, requireProductAuth } from '~/lib/auth.server'
+import { canProductWrite, canProductAdmin, canProductContribute } from '~/lib/permissions'
 import { createNotification } from '~/lib/notifications.server'
 
 // ──────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ export const getIdeas = createServerFn({ method: 'GET' })
         .enum([
           'SUBMITTED',
           'UNDER_REVIEW',
-          'PLANNED',
+          'CONVERTED',
           'IN_PROGRESS',
           'COMPLETED',
           'REJECTED',
@@ -72,6 +72,7 @@ export const getIdeas = createServerFn({ method: 'GET' })
         _count: { select: { comments: true } },
         tags: true,
         author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        convertedToItem: { select: { id: true, roadmap: { select: { productId: true } } } },
       },
       orderBy,
     })
@@ -92,12 +93,14 @@ export const getIdea = createServerFn({ method: 'GET' })
           orderBy: { createdAt: 'asc' },
         },
         tags: true,
+        convertedToItem: { select: { id: true, roadmap: { select: { productId: true } } } },
       },
     })
     if (!idea) throw new Error('Idea not found')
     return idea
   })
 
+// VIEWER+ can create ideas
 export const createIdea = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -108,14 +111,8 @@ export const createIdea = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo, userId } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
-
-    // Verify product belongs to client
-    const product = await prisma.product.findFirst({
-      where: { id: data.productId, clientId },
-    })
-    if (!product) throw new Error('Product not found')
+    const { clientId, userId, effectiveProductRole } = await requireProductAuth({ productId: data.productId })
+    if (!canProductContribute(effectiveProductRole)) throw new Error('Insufficient permissions')
 
     return prisma.idea.create({
       data: {
@@ -139,6 +136,7 @@ export const createIdea = createServerFn({ method: 'POST' })
     })
   })
 
+// MEMBER+ can edit ideas (title, description, RICE scoring)
 export const updateIdea = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -152,16 +150,18 @@ export const updateIdea = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { clientId } = await requireClientAuth()
 
     const { ideaId, ...updateData } = data
 
-    // Verify idea belongs to client
+    // Verify idea belongs to client and get productId
     const existing = await prisma.idea.findFirst({
       where: { id: ideaId, clientId },
     })
     if (!existing) throw new Error('Idea not found')
+
+    const { effectiveProductRole } = await requireProductAuth({ productId: existing.productId })
+    if (!canProductWrite(effectiveProductRole)) throw new Error('Insufficient permissions')
 
     // Merge existing RICE fields with incoming updates to calculate score
     const reach = updateData.riceReach ?? existing.riceReach
@@ -180,6 +180,7 @@ export const updateIdea = createServerFn({ method: 'POST' })
     })
   })
 
+// OWNER only can change idea status
 export const updateIdeaStatus = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -187,7 +188,6 @@ export const updateIdeaStatus = createServerFn({ method: 'POST' })
       status: z.enum([
         'SUBMITTED',
         'UNDER_REVIEW',
-        'PLANNED',
         'IN_PROGRESS',
         'COMPLETED',
         'REJECTED',
@@ -196,14 +196,15 @@ export const updateIdeaStatus = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo, userId } = await requireClientAuth()
-    if (!canAdmin(role, isDemo))
-      throw new Error('Admin permission required')
+    const { clientId, userId } = await requireClientAuth()
 
     const existing = await prisma.idea.findFirst({
       where: { id: data.ideaId, clientId },
     })
     if (!existing) throw new Error('Idea not found')
+
+    const { effectiveProductRole } = await requireProductAuth({ productId: existing.productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
 
     const updated = await prisma.idea.update({
       where: { id: data.ideaId },
@@ -225,16 +226,19 @@ export const updateIdeaStatus = createServerFn({ method: 'POST' })
     return updated
   })
 
+// VIEWER+ can vote on ideas
 export const voteIdea = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ ideaId: z.string() }))
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo, userId } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { clientId, userId } = await requireClientAuth()
 
     const existing = await prisma.idea.findFirst({
       where: { id: data.ideaId, clientId },
     })
     if (!existing) throw new Error('Idea not found')
+
+    const { effectiveProductRole } = await requireProductAuth({ productId: existing.productId })
+    if (!canProductContribute(effectiveProductRole)) throw new Error('Insufficient permissions')
 
     const updated = await prisma.idea.update({
       where: { id: data.ideaId },
@@ -256,6 +260,7 @@ export const voteIdea = createServerFn({ method: 'POST' })
     return updated
   })
 
+// VIEWER+ can comment on ideas
 export const addIdeaComment = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -264,14 +269,16 @@ export const addIdeaComment = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo, userId } = await requireClientAuth()
-    if (!canWrite(role, isDemo)) throw new Error('Insufficient permissions')
+    const { clientId, userId } = await requireClientAuth()
 
     // Verify idea belongs to client
     const idea = await prisma.idea.findFirst({
       where: { id: data.ideaId, clientId },
     })
     if (!idea) throw new Error('Idea not found')
+
+    const { effectiveProductRole } = await requireProductAuth({ productId: idea.productId })
+    if (!canProductContribute(effectiveProductRole)) throw new Error('Insufficient permissions')
 
     const comment = await prisma.comment.create({
       data: {
@@ -299,17 +306,16 @@ export const addIdeaComment = createServerFn({ method: 'POST' })
     return comment
   })
 
-export const promoteToRoadmap = createServerFn({ method: 'POST' })
+// OWNER only can convert ideas to features
+export const convertToFeature = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
       ideaId: z.string(),
-      roadmapId: z.string(),
+      featureName: z.string().optional(),
     }),
   )
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canAdmin(role, isDemo))
-      throw new Error('Admin permission required')
+    const { clientId } = await requireClientAuth()
 
     // Verify idea belongs to client
     const idea = await prisma.idea.findFirst({
@@ -317,27 +323,38 @@ export const promoteToRoadmap = createServerFn({ method: 'POST' })
     })
     if (!idea) throw new Error('Idea not found')
 
-    // Verify roadmap belongs to client
-    const roadmap = await prisma.roadmap.findFirst({
-      where: { id: data.roadmapId, clientId },
-    })
-    if (!roadmap) throw new Error('Roadmap not found')
+    const { effectiveProductRole } = await requireProductAuth({ productId: idea.productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
 
-    // Create roadmap item from idea data and update idea status in a transaction
-    const [roadmapItem] = await prisma.$transaction([
-      prisma.roadmapItem.create({
-        data: {
-          title: idea.title,
-          description: idea.description,
-          roadmapId: data.roadmapId,
-          status: 'PLANNED',
-        },
-      }),
-      prisma.idea.update({
-        where: { id: data.ideaId },
-        data: { status: 'PLANNED' },
-      }),
-    ])
+    if (idea.status === 'CONVERTED')
+      throw new Error('Idea has already been converted to a feature')
+
+    // Pick the first roadmap for the idea's product
+    const roadmap = await prisma.roadmap.findFirst({
+      where: { productId: idea.productId, clientId },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (!roadmap) throw new Error('No roadmap found for this product')
+
+    const featureTitle = data.featureName?.trim() || idea.title
+
+    // Create feature from idea and link them bidirectionally
+    const roadmapItem = await prisma.roadmapItem.create({
+      data: {
+        title: featureTitle,
+        description: idea.description,
+        roadmapId: roadmap.id,
+        status: 'BACKLOG',
+      },
+    })
+
+    await prisma.idea.update({
+      where: { id: data.ideaId },
+      data: {
+        status: 'CONVERTED',
+        convertedToItemId: roadmapItem.id,
+      },
+    })
 
     return roadmapItem
   })

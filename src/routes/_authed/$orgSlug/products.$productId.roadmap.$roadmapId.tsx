@@ -22,7 +22,8 @@ import {
 import { exportRoadmapPdf } from '~/server/functions/export-pdf'
 import { downloadBase64 } from '~/lib/download'
 import { StatusBadge } from '~/components/common/status-badge'
-import { canWrite, canAdmin } from '~/lib/permissions'
+import { canProductWrite, canProductAdmin } from '~/lib/permissions'
+import type { EffectiveProductRole } from '~/lib/permissions'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -86,11 +87,11 @@ function formatDate(dateStr: string | Date | null | undefined) {
 function RoadmapDetailPage() {
   const roadmap = Route.useLoaderData()
   const { orgSlug, productId, roadmapId } = Route.useParams()
-  const { role, isDemo } = Route.useRouteContext() as { role?: string; isDemo?: boolean }
+  const { productRole } = Route.useRouteContext() as { productRole?: EffectiveProductRole }
   const navigate = useNavigate()
 
-  const userCanWrite = canWrite(role as any, isDemo)
-  const userCanAdmin = canAdmin(role as any, isDemo)
+  const userCanWrite = canProductWrite(productRole ?? null)
+  const userCanAdmin = canProductAdmin(productRole ?? null)
 
   const [view, setView] = useState('kanban')
 

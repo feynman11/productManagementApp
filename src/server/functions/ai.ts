@@ -1,8 +1,8 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { prisma } from '~/lib/prisma'
-import { requireClientAuth } from '~/lib/auth.server'
-import { canAdmin } from '~/lib/permissions'
+import { requireClientAuth, requireProductAuth } from '~/lib/auth.server'
+import { canProductAdmin } from '~/lib/permissions'
 import { openai } from '~/lib/openai'
 
 export const detectDuplicateIdeas = createServerFn({ method: 'POST' })
@@ -67,15 +67,16 @@ export const detectDuplicateIdeas = createServerFn({ method: 'POST' })
 export const analyzeIdeaSentiment = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ ideaId: z.string() }))
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canAdmin(role, isDemo))
-      throw new Error('Admin permission required')
+    const { clientId } = await requireClientAuth()
 
     const idea = await prisma.idea.findFirst({
       where: { id: data.ideaId, clientId },
       include: { comments: { select: { content: true } } },
     })
     if (!idea) throw new Error('Idea not found')
+
+    const { effectiveProductRole } = await requireProductAuth({ productId: idea.productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
 
     const commentText = idea.comments
       .map((c) => c.content)
@@ -115,9 +116,7 @@ export const analyzeIdeaSentiment = createServerFn({ method: 'POST' })
 export const generateReleaseNotes = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ releaseId: z.string() }))
   .handler(async ({ data }) => {
-    const { clientId, role, isDemo } = await requireClientAuth()
-    if (!canAdmin(role, isDemo))
-      throw new Error('Admin permission required')
+    const { clientId } = await requireClientAuth()
 
     // Find release with its roadmap items (verify through roadmap -> client chain)
     const release = await prisma.release.findFirst({
@@ -127,10 +126,13 @@ export const generateReleaseNotes = createServerFn({ method: 'POST' })
       },
       include: {
         items: { select: { title: true, description: true, status: true } },
-        roadmap: { select: { name: true, product: { select: { name: true } } } },
+        roadmap: { select: { name: true, productId: true, product: { select: { name: true } } } },
       },
     })
     if (!release) throw new Error('Release not found')
+
+    const { effectiveProductRole } = await requireProductAuth({ productId: release.roadmap.productId })
+    if (!canProductAdmin(effectiveProductRole)) throw new Error('Product owner permission required')
 
     const itemsList = release.items
       .map((item) => `- ${item.title}: ${item.description ?? 'No description'} (${item.status})`)

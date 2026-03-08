@@ -14,7 +14,8 @@ import { exportIssuesCsv } from '~/server/functions/export'
 import { downloadFile } from '~/lib/download'
 import { StatusBadge } from '~/components/common/status-badge'
 import { SeverityBadge } from '~/components/common/severity-badge'
-import { canWrite } from '~/lib/permissions'
+import { canProductWrite } from '~/lib/permissions'
+import type { EffectiveProductRole } from '~/lib/permissions'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card'
@@ -59,10 +60,10 @@ function formatDate(dateStr: string | Date) {
 function IssuesPage() {
   const issues = Route.useLoaderData()
   const { orgSlug, productId } = Route.useParams()
-  const { role, isDemo } = Route.useRouteContext() as { role?: string; isDemo?: boolean }
+  const { productRole } = Route.useRouteContext() as { productRole?: EffectiveProductRole }
   const navigate = useNavigate()
 
-  const userCanWrite = canWrite(role as any, isDemo)
+  const userCanWrite = canProductWrite(productRole ?? null)
 
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [severityFilter, setSeverityFilter] = useState<string>('ALL')

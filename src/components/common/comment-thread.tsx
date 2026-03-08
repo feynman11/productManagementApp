@@ -19,12 +19,14 @@ interface Comment {
   authorId: string
   author?: CommentAuthor
   createdAt: string | Date
+  phase?: 'idea' | 'feature'
 }
 
 interface CommentThreadProps {
   comments: Comment[]
   onAddComment: (content: string) => Promise<void>
   canComment: boolean
+  showPhaseLabels?: boolean
 }
 
 function formatRelativeDate(dateStr: string | Date) {
@@ -68,6 +70,7 @@ export function CommentThread({
   comments,
   onAddComment,
   canComment,
+  showPhaseLabels = false,
 }: CommentThreadProps) {
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -134,6 +137,19 @@ export function CommentThread({
                     <span className="text-xs text-muted-foreground">
                       {formatRelativeDate(comment.createdAt)}
                     </span>
+                    {showPhaseLabels && comment.phase && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'text-[10px] px-1.5 py-0',
+                          comment.phase === 'idea'
+                            ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                            : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
+                        )}
+                      >
+                        {comment.phase === 'idea' ? 'Idea phase' : 'Feature phase'}
+                      </Badge>
+                    )}
                   </div>
                   <Card>
                     <CardContent className="px-3.5 py-2.5">

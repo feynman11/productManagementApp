@@ -1,16 +1,17 @@
 import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
 import { getCookie, setCookie } from '@tanstack/start-server-core'
 import { prisma } from './prisma'
-import type { OrgRole } from '../generated/prisma/client/enums'
+import type { OrgRole, ProductMemberRole } from '../generated/prisma/client/enums'
+import { resolveProductRole, type EffectiveProductRole } from './permissions'
 
 const GUEST_DEMO_COOKIE = 'guest_demo_client_id'
 /** Sentinel userId returned for unauthenticated guest demo access. */
-export const GUEST_USER_ID = '__guest__'
+const GUEST_USER_ID = '__guest__'
 
 /**
  * Basic Clerk auth — returns userId only.
  */
-export async function requireAuth() {
+async function requireAuth() {
   const { userId } = await auth()
   if (!userId) throw new Error('Not authenticated')
   return { userId }
@@ -19,7 +20,7 @@ export async function requireAuth() {
 /**
  * Optional Clerk auth — returns userId or null (does not throw).
  */
-export async function optionalAuth() {
+async function optionalAuth() {
   const { userId } = await auth()
   return { userId }
 }
@@ -194,4 +195,49 @@ export async function requireSuperAdmin() {
     throw new Error('Super admin access required')
   }
   return appUser
+}
+
+/**
+ * Product-scoped auth. Resolves both org membership and product-level role.
+ * Returns the effective product role (OWNER/MEMBER/VIEWER) accounting for
+ * org admin override and super admin status.
+ */
+export async function requireProductAuth(opts: { productId: string; slug?: string }) {
+  const clientAuth = await requireClientAuth({ slug: opts.slug })
+  const { userId, clientId, role: orgRole, isDemo, isGuest, appUser } = clientAuth
+
+  // Guests and demo users always get VIEWER
+  if (isGuest || isDemo) {
+    return {
+      ...clientAuth,
+      productRole: null as ProductMemberRole | null,
+      effectiveProductRole: 'VIEWER' as EffectiveProductRole,
+    }
+  }
+
+  // Verify product belongs to this org
+  const product = await prisma.product.findFirst({
+    where: { id: opts.productId, clientId },
+    select: { id: true },
+  })
+  if (!product) throw new Error('Product not found')
+
+  // Look up product membership
+  const membership = await prisma.productMember.findUnique({
+    where: { productId_userId: { productId: opts.productId, userId } },
+    select: { role: true },
+  })
+
+  const effectiveProductRole = resolveProductRole({
+    orgRole,
+    productRole: membership?.role ?? null,
+    isSuperAdmin: appUser?.isSuperAdmin ?? false,
+    isDemo,
+  })
+
+  return {
+    ...clientAuth,
+    productRole: membership?.role ?? null,
+    effectiveProductRole,
+  }
 }
