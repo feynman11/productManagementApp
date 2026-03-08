@@ -14,6 +14,11 @@ export const Route = createFileRoute('/')({
     const ctx = await getUserContext()
     if (!ctx.authenticated) return
 
+    // If user has no name, send to onboarding to collect it
+    if (!ctx.name) {
+      throw redirect({ to: '/onboarding' })
+    }
+
     // Redirect to active org, first org, or onboarding
     if (ctx.activeOrgSlug) {
       throw redirect({ to: '/$orgSlug', params: { orgSlug: ctx.activeOrgSlug } })

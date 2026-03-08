@@ -214,6 +214,7 @@ async function processPendingInvitations(
     const pending = publicMetadata.pendingInvitations as Array<{
       clientId: string
       role: 'ADMIN' | 'CONTRIBUTOR' | 'VIEWER'
+      products?: Array<{ productId: string; role: 'OWNER' | 'MEMBER' | 'VIEWER' }>
     }> | undefined
 
     if (!pending || pending.length === 0) return
@@ -241,6 +242,25 @@ async function processPendingInvitations(
           role: inv.role,
         },
       })
+
+      // Add to products
+      if (inv.products) {
+        for (const pa of inv.products) {
+          const existingMember = await prisma.productMember.findUnique({
+            where: { productId_userId: { productId: pa.productId, userId: appUserId } },
+          })
+          if (!existingMember) {
+            await prisma.productMember.create({
+              data: {
+                productId: pa.productId,
+                userId: appUserId,
+                clientId: inv.clientId,
+                role: pa.role,
+              },
+            })
+          }
+        }
+      }
 
       if (!setActiveClient) {
         // Set the first invited org as the active org if user has none

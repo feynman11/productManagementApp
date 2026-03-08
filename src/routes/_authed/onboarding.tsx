@@ -1,8 +1,12 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { Sparkles, Building2, Eye } from 'lucide-react'
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { useState } from 'react'
+import { Sparkles, Building2, Eye, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
 import { Badge } from '~/components/ui/badge'
-import { getUserContext } from '~/server/functions/auth'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
+import { Label } from '~/components/ui/label'
+import { getUserContext, updateUserName } from '~/server/functions/auth'
 
 export const Route = createFileRoute('/_authed/onboarding')({
   beforeLoad: ({ context }) => {
@@ -16,6 +20,13 @@ export const Route = createFileRoute('/_authed/onboarding')({
 
 function OnboardingPage() {
   const ctx = Route.useLoaderData()
+  const needsName = ctx.authenticated && !ctx.name
+  const [nameCompleted, setNameCompleted] = useState(false)
+
+  if (needsName && !nameCompleted) {
+    return <NamePrompt onComplete={() => setNameCompleted(true)} />
+  }
+
   const orgs = ctx.authenticated ? ctx.orgs : []
 
   return (
@@ -81,6 +92,80 @@ function OnboardingPage() {
               </p>
             </div>
           )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function NamePrompt({ onComplete }: { onComplete: () => void }) {
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmed = name.trim()
+    if (!trimmed) return
+
+    setSaving(true)
+    setError(null)
+    try {
+      await updateUserName({ data: { name: trimmed } })
+      onComplete()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save name')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 p-4 relative overflow-hidden">
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute top-1/3 left-1/3 h-72 w-72 rounded-full bg-primary/5 blur-3xl" />
+        <div className="absolute bottom-1/3 right-1/3 h-72 w-72 rounded-full bg-primary/3 blur-3xl" />
+      </div>
+
+      <Card className="w-full max-w-md border-none bg-transparent shadow-none">
+        <CardHeader className="items-center text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl brand-gradient shadow-lg mb-2">
+            <Sparkles className="h-7 w-7 text-white" />
+          </div>
+          <CardTitle className="text-2xl tracking-tight font-heading">
+            What's your name?
+          </CardTitle>
+          <CardDescription className="max-w-sm">
+            Enter your full name so your team knows who you are.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="full-name">Full Name</Label>
+              <Input
+                id="full-name"
+                type="text"
+                placeholder="Jane Smith"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <Button type="submit" className="w-full" disabled={saving || !name.trim()}>
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                'Continue'
+              )}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

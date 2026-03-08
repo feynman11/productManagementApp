@@ -1,6 +1,6 @@
-import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
-import { Settings, Users, Mail, Trash2, Loader2 } from 'lucide-react'
+import { createFileRoute } from '@tanstack/react-router'
+import { useState, useEffect } from 'react'
+import { Settings, Users, Mail, Trash2, Loader2, Package, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -28,6 +28,7 @@ import {
   getPendingInvitations,
   revokeInvitation,
   getOrgMembers,
+  getOrgProductsForInvite,
   updateOrgMemberRole,
   removeOrgMember,
 } from '~/server/functions/invitations'
@@ -135,7 +136,6 @@ function MembersTab({
   clientId: string
   isDemo: boolean
 }) {
-  const router = useRouter()
   const [members, setMembers] = useState<Awaited<ReturnType<typeof getOrgMembers>> | null>(null)
   const [pendingInvites, setPendingInvites] = useState<
     Awaited<ReturnType<typeof getPendingInvitations>> | null
@@ -387,6 +387,13 @@ function PendingInviteRow({
   )
 }
 
+type ProductAssignment = {
+  productId: string
+  role: 'OWNER' | 'MEMBER' | 'VIEWER'
+}
+
+type OrgProduct = Awaited<ReturnType<typeof getOrgProductsForInvite>>[number]
+
 function InviteDialog({
   open,
   onOpenChange,
@@ -400,9 +407,40 @@ function InviteDialog({
 }) {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'ADMIN' | 'CONTRIBUTOR' | 'VIEWER'>('VIEWER')
+  const [productAssignments, setProductAssignments] = useState<ProductAssignment[]>([])
+  const [orgProducts, setOrgProducts] = useState<OrgProduct[]>([])
+  const [productsLoaded, setProductsLoaded] = useState(false)
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ type: 'added' | 'invited'; email: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (open && !productsLoaded) {
+      getOrgProductsForInvite({ data: { clientId } })
+        .then(setOrgProducts)
+        .catch(() => {})
+        .finally(() => setProductsLoaded(true))
+    }
+  }, [open, productsLoaded, clientId])
+
+  const availableProducts = orgProducts.filter(
+    (p) => !productAssignments.some((pa) => pa.productId === p.id),
+  )
+
+  function addProduct(productId: string) {
+    if (!productId) return
+    setProductAssignments((prev) => [...prev, { productId, role: 'MEMBER' }])
+  }
+
+  function removeProduct(productId: string) {
+    setProductAssignments((prev) => prev.filter((pa) => pa.productId !== productId))
+  }
+
+  function updateProductRole(productId: string, newRole: 'OWNER' | 'MEMBER' | 'VIEWER') {
+    setProductAssignments((prev) =>
+      prev.map((pa) => (pa.productId === productId ? { ...pa, role: newRole } : pa)),
+    )
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -411,9 +449,17 @@ function InviteDialog({
     setResult(null)
 
     try {
-      const res = await inviteUserToOrg({ data: { clientId, emailAddress: email, role } })
+      const res = await inviteUserToOrg({
+        data: {
+          clientId,
+          emailAddress: email,
+          role,
+          products: productAssignments,
+        },
+      })
       setResult(res)
       setEmail('')
+      setProductAssignments([])
       onInvited()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send invitation')
@@ -426,13 +472,14 @@ function InviteDialog({
       setEmail('')
       setError(null)
       setResult(null)
+      setProductAssignments([])
     }
     onOpenChange(open)
   }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Invite a Member</DialogTitle>
           <DialogDescription>
@@ -455,7 +502,7 @@ function InviteDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Role</Label>
+            <Label>Organization Role</Label>
             <Select value={role} onValueChange={(v) => setRole(v as typeof role)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -473,9 +520,79 @@ function InviteDialog({
             </p>
           </div>
 
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+          {/* Product Assignments */}
+          <div className="space-y-2">
+            <Label>Products</Label>
+            <p className="text-xs text-muted-foreground">
+              Optionally add this user to specific products with a role.
+            </p>
+
+            {productAssignments.length > 0 && (
+              <div className="space-y-2">
+                {productAssignments.map((pa) => {
+                  const product = orgProducts.find((p) => p.id === pa.productId)
+                  return (
+                    <div
+                      key={pa.productId}
+                      className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2"
+                    >
+                      <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm font-medium flex-1 truncate">
+                        {product?.name ?? pa.productId}
+                      </span>
+                      <Select
+                        value={pa.role}
+                        onValueChange={(v) =>
+                          updateProductRole(pa.productId, v as 'OWNER' | 'MEMBER' | 'VIEWER')
+                        }
+                      >
+                        <SelectTrigger size="sm" className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="OWNER">Owner</SelectItem>
+                          <SelectItem value="MEMBER">Member</SelectItem>
+                          <SelectItem value="VIEWER">Viewer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => removeProduct(pa.productId)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {availableProducts.length > 0 && (
+              <Select value="" onValueChange={addProduct}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Add to a product..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableProducts.map((product) => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            {orgProducts.length === 0 && productsLoaded && (
+              <p className="text-xs text-muted-foreground italic">
+                No products in this organization yet.
+              </p>
+            )}
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           {result && (
             <p className="text-sm text-emerald-600 dark:text-emerald-400">

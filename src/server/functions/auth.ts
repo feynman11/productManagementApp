@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
-import { auth } from '@clerk/tanstack-react-start/server'
+import { z } from 'zod'
+import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
 import { prisma } from '~/lib/prisma'
 import { requireAppUser } from '~/lib/auth.server'
 
@@ -57,8 +58,37 @@ export const getUserContext = createServerFn({ method: 'GET' })
     return {
       authenticated: true as const,
       appUserId: appUser.id,
+      name: appUser.name,
       isSuperAdmin: appUser.isSuperAdmin,
       activeOrgSlug: appUser.activeClient?.slug ?? null,
       orgs,
     }
+  })
+
+/**
+ * Update the current user's display name.
+ */
+export const updateUserName = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ name: z.string().min(1).max(100) }))
+  .handler(async ({ data }) => {
+    const appUser = await requireAppUser()
+
+    // Split into first/last for Clerk
+    const parts = data.name.trim().split(/\s+/)
+    const firstName = parts[0]
+    const lastName = parts.length > 1 ? parts.slice(1).join(' ') : undefined
+
+    // Update both AppUser and Clerk in parallel
+    await Promise.all([
+      prisma.appUser.update({
+        where: { id: appUser.id },
+        data: { name: data.name },
+      }),
+      clerkClient().users.updateUser(appUser.clerkUserId, {
+        firstName,
+        lastName: lastName ?? '',
+      }),
+    ])
+
+    return { success: true }
   })

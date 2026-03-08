@@ -4,8 +4,13 @@ import { clerkClient } from '@clerk/tanstack-react-start/server'
 import { prisma } from '~/lib/prisma'
 import { requireOrgAdmin, requireClientAuth } from '~/lib/auth.server'
 
+const productAssignmentSchema = z.object({
+  productId: z.string(),
+  role: z.enum(['OWNER', 'MEMBER', 'VIEWER']).default('MEMBER'),
+})
+
 // ──────────────────────────────────────────────────────
-// Invite a user to an org
+// Invite a user to an org (with optional product assignments)
 // ──────────────────────────────────────────────────────
 
 export const inviteUserToOrg = createServerFn({ method: 'POST' })
@@ -14,6 +19,7 @@ export const inviteUserToOrg = createServerFn({ method: 'POST' })
       clientId: z.string(),
       emailAddress: z.string().email(),
       role: z.enum(['ADMIN', 'CONTRIBUTOR', 'VIEWER']).default('VIEWER'),
+      products: z.array(productAssignmentSchema).default([]),
     }),
   )
   .handler(async ({ data }) => {
@@ -26,6 +32,18 @@ export const inviteUserToOrg = createServerFn({ method: 'POST' })
     })
     if (!client || client.status !== 'ACTIVE') throw new Error('Organization not found')
     if (client.isDemo) throw new Error('Cannot invite users to demo organization')
+
+    // Validate that all referenced products belong to this org
+    if (data.products.length > 0) {
+      const productIds = data.products.map((p) => p.productId)
+      const products = await prisma.product.findMany({
+        where: { id: { in: productIds }, clientId: data.clientId },
+        select: { id: true },
+      })
+      if (products.length !== productIds.length) {
+        throw new Error('One or more products not found in this organization')
+      }
+    }
 
     // Check if user already exists in the app
     const existingAppUser = await prisma.appUser.findFirst({
@@ -50,11 +68,35 @@ export const inviteUserToOrg = createServerFn({ method: 'POST' })
         },
       })
 
+      // Add to products
+      for (const pa of data.products) {
+        const exists = await prisma.productMember.findUnique({
+          where: { productId_userId: { productId: pa.productId, userId: existingAppUser.id } },
+        })
+        if (!exists) {
+          await prisma.productMember.create({
+            data: {
+              productId: pa.productId,
+              userId: existingAppUser.id,
+              clientId: data.clientId,
+              role: pa.role,
+            },
+          })
+        }
+      }
+
       return { type: 'added' as const, email: data.emailAddress }
     }
 
     // New user — send Clerk invitation with org metadata
     const clerk = clerkClient()
+
+    const invitationEntry = {
+      clientId: data.clientId,
+      role: data.role,
+      invitedAt: new Date().toISOString(),
+      products: data.products.length > 0 ? data.products : undefined,
+    }
 
     // Check for existing pending invitation for this email
     const existingInvitations = await clerk.invitations.getInvitationList({
@@ -74,11 +116,7 @@ export const inviteUserToOrg = createServerFn({ method: 'POST' })
 
       // Revoke old invitation and re-create with combined metadata
       await clerk.invitations.revokeInvitation(existingInvite.id)
-      pendingInvitations.push({
-        clientId: data.clientId,
-        role: data.role,
-        invitedAt: new Date().toISOString(),
-      } as { clientId: string })
+      pendingInvitations.push(invitationEntry as unknown as { clientId: string })
 
       await clerk.invitations.createInvitation({
         emailAddress: data.emailAddress,
@@ -89,19 +127,35 @@ export const inviteUserToOrg = createServerFn({ method: 'POST' })
       await clerk.invitations.createInvitation({
         emailAddress: data.emailAddress,
         publicMetadata: {
-          pendingInvitations: [
-            {
-              clientId: data.clientId,
-              role: data.role,
-              invitedAt: new Date().toISOString(),
-            },
-          ],
+          pendingInvitations: [invitationEntry],
         },
         notify: true,
       })
     }
 
     return { type: 'invited' as const, email: data.emailAddress }
+  })
+
+// ──────────────────────────────────────────────────────
+// Get org products with actions (for the invite picker)
+// ──────────────────────────────────────────────────────
+
+export const getOrgProductsForInvite = createServerFn({ method: 'GET' })
+  .inputValidator(z.object({ clientId: z.string() }))
+  .handler(async ({ data }) => {
+    await requireOrgAdmin(data.clientId)
+
+    const products = await prisma.product.findMany({
+      where: { clientId: data.clientId },
+      select: {
+        id: true,
+        name: true,
+        icon: true,
+      },
+      orderBy: { name: 'asc' },
+    })
+
+    return products
   })
 
 // ──────────────────────────────────────────────────────
@@ -131,6 +185,7 @@ export const getPendingInvitations = createServerFn({ method: 'GET' })
           clientId: string
           role: string
           invitedAt: string
+          products?: Array<{ productId: string; role: string }>
         }>
         const orgEntry = pending.find((p) => p.clientId === data.clientId)!
         return {
@@ -139,6 +194,7 @@ export const getPendingInvitations = createServerFn({ method: 'GET' })
           role: orgEntry.role,
           invitedAt: orgEntry.invitedAt,
           createdAt: inv.createdAt,
+          products: orgEntry.products ?? [],
         }
       })
   })
